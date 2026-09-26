@@ -21,9 +21,24 @@
      POST   /inbox            reading or [readings]          (INBOX_KEY or APP_KEY)
      GET    /inbox            → { items: [...] }             (APP_KEY)
      DELETE /inbox            { keys: [...] }                (APP_KEY)
+     POST   /ai               { task, prompt, image? } → { text, model }  (APP_KEY)
+                              Relays one request to OpenAI or Gemini using a key
+                              kept here as a secret; the app never sees it.
+
+   AI settings (optional):
+     GROQ_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY   secrets; set one or more
+     Routing when several are set:
+       text jobs (describe a meal, coach)  → Groq, else OpenAI, else Gemini
+       photo jobs (meal photo, label)      → Gemini, else OpenAI, else Groq
+     AI_TEXT_PROVIDER / AI_VISION_PROVIDER  override: "groq" | "openai" | "gemini"
+     AI_MODEL          text model   (defaults: openai/gpt-oss-120b, gpt-4o-mini, gemini-flash-latest)
+     AI_VISION_MODEL   photo model  (defaults: qwen/qwen3.8-27b, gpt-4o-mini, gemini-flash-latest)
+     AI_DAILY_LIMIT    max AI calls per day, default 60 (a spending brake)
    ========================================================================== */
 
-const VERSION = "1.0.0";
+const VERSION = "1.1.0";
+const MAX_IMAGE_CHARS = 3_000_000;   // ~2.2 MB of JPEG as base64
+const MAX_PROMPT_CHARS = 80_000;
 const MAX_STATE_BYTES = 8 * 1024 * 1024;
 const INBOX_TTL = 60 * 60 * 24 * 30;
 
@@ -43,7 +58,7 @@ export default {
       const path = url.pathname.replace(/\/+$/, "") || "/";
 
       if (path === "/" && req.method === "GET") {
-        return json({ ok: true, service: "setpoint-sync", version: VERSION, configured: !!(env.APP_KEY && env.INBOX_KEY && env.SP) });
+        return json({ ok: true, service: "setpoint-sync", version: VERSION, configured: !!(env.APP_KEY && env.INBOX_KEY && env.SP), ai: aiProvider(env) });
       }
       if (!env.SP) return json({ error: "KV binding SP is missing" }, 500);
 
@@ -94,12 +109,98 @@ export default {
         }
         return json({ error: "method not allowed" }, 405);
       }
+      if (path === "/ai") {
+        if (!isApp) return json({ error: "unauthorised" }, 401);
+        if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
+        if (!aiProvider(env)) return json({ error: "AI isn't set up on this Worker. Add OPENAI_API_KEY or GEMINI_API_KEY as a secret." }, 501);
+        const body = await req.json().catch(() => null);
+        if (!body || typeof body.prompt !== "string" || !body.prompt.trim()) return json({ error: "expected { task, prompt, image? }" }, 400);
+        if (body.prompt.length > MAX_PROMPT_CHARS) return json({ error: "prompt too long" }, 413);
+        let image = null;
+        if (body.image != null) {
+          const m = typeof body.image === "string" && body.image.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/);
+          if (!m) return json({ error: "image must be a base64 data URL (jpeg, png or webp)" }, 400);
+          if (body.image.length > MAX_IMAGE_CHARS) return json({ error: "image too large; resize before sending" }, 413);
+          image = { mime: m[1], data: m[2] };
+        }
+        // daily brake so a leaked key or a bug can't run up a bill
+        const day = new Date().toISOString().slice(0, 10), ck = "ai:count:" + day;
+        const used = parseInt(await env.SP.get(ck) || "0", 10), limit = parseInt(env.AI_DAILY_LIMIT || "60", 10);
+        if (used >= limit) return json({ error: `Daily AI limit reached (${limit}). Raise AI_DAILY_LIMIT in the Worker settings if you need more.` }, 429);
+        await env.SP.put(ck, String(used + 1), { expirationTtl: 60 * 60 * 48 });
+        const maxTokens = Math.min(4000, Math.max(200, body.maxTokens | 0 || 900));
+        const provider = image ? visionProvider(env) : textProvider(env);
+        const out = await callAI(env, provider, body.prompt, image, maxTokens);
+        if (out.error) return json({ error: out.error }, 502);
+        return json({ text: out.text, model: out.model, provider, used: used + 1, limit });
+      }
       return json({ error: "not found" }, 404);
     } catch (e) {
       return json({ error: "server error", detail: String(e && e.message || e) }, 500);
     }
   }
 };
+
+const KEYS = { groq: "GROQ_API_KEY", openai: "OPENAI_API_KEY", gemini: "GEMINI_API_KEY" };
+function pickProvider(env, order, override) {
+  if (override && env[KEYS[override]]) return override;
+  return order.find(p => env[KEYS[p]]) || null;
+}
+const textProvider = env => pickProvider(env, ["groq", "openai", "gemini"], env.AI_TEXT_PROVIDER);
+const visionProvider = env => pickProvider(env, ["gemini", "openai", "groq"], env.AI_VISION_PROVIDER);
+// what the health check reports: "groq" or, when photos go elsewhere, "groq+gemini"
+function aiProvider(env) {
+  const t = textProvider(env), v = visionProvider(env);
+  return !t ? null : t === v ? t : `${t}+${v}`;
+}
+
+/* One request to the configured provider. Returns { text, model } or { error }. */
+async function callAI(env, provider, prompt, image, maxTokens) {
+  const f = env.FETCH || fetch;   // tests inject a fake
+  if (provider === "groq") {
+    // OpenAI-compatible. gpt-oss has no vision, so photos go to a vision model.
+    const model = image ? (env.AI_VISION_MODEL || "qwen/qwen3.8-27b") : (env.AI_MODEL || "openai/gpt-oss-120b");
+    const content = image ? [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: `data:${image.mime};base64,${image.data}` } }] : prompt;
+    const r = await f("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + env.GROQ_API_KEY, "Content-Type": "application/json" },
+      // reasoning models spend tokens thinking before they answer; leave room for both
+      body: JSON.stringify({ model, max_completion_tokens: maxTokens + 3000, temperature: 0.3, messages: [{ role: "user", content }] })
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) return { error: "Groq: " + ((d.error && d.error.message) || r.status) };
+    let text = d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content;
+    if (text) text = text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+    return text ? { text, model: d.model || model } : { error: "Groq returned no text" };
+  }
+  if (provider === "openai") {
+    const model = (image && env.AI_VISION_MODEL) || (!image && env.AI_MODEL) || "gpt-4o-mini";
+    const content = [{ type: "text", text: prompt }];
+    if (image) content.push({ type: "image_url", image_url: { url: `data:${image.mime};base64,${image.data}`, detail: "auto" } });
+    const r = await f("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + env.OPENAI_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: "user", content }] })
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) return { error: "OpenAI: " + ((d.error && d.error.message) || r.status) };
+    const text = d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content;
+    return text ? { text, model: d.model || model } : { error: "OpenAI returned no text" };
+  }
+  const model = (image && env.AI_VISION_MODEL) || (!image && env.AI_MODEL) || "gemini-flash-latest";
+  const parts = [{ text: prompt }];
+  if (image) parts.push({ inline_data: { mime_type: image.mime, data: image.data } });
+  const r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+    method: "POST",
+    headers: { "x-goog-api-key": env.GEMINI_API_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({ contents: [{ role: "user", parts }], generationConfig: { maxOutputTokens: maxTokens } })
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) return { error: "Gemini: " + ((d.error && d.error.message) || r.status) };
+  const c = d.candidates && d.candidates[0];
+  const text = c && c.content && (c.content.parts || []).map(p => p.text || "").join("");
+  return text ? { text, model } : { error: "Gemini returned no text" + (c && c.finishReason ? ` (${c.finishReason})` : "") };
+}
 
 async function readState(env) {
   const { value, metadata } = await env.SP.getWithMetadata("state");

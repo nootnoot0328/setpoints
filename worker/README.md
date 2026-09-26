@@ -20,6 +20,30 @@ It fits comfortably in Cloudflare's free plan: 100,000 requests a day and 1,000 
 6. **Check it.** Open `https://setpoint-sync.<your-subdomain>.workers.dev/` in a browser. You should see `"configured": true`. If it says `false`, the binding name or one of the secrets is missing.
 7. **Connect the app.** In Setpoint, paste the Worker address, choose a passphrase (the same one on every device) and tap *Connect this device*. Then follow the in-app *Set up the Shortcut* steps.
 
+## Optional: AI inside the app
+
+With an AI key on the Worker, Setpoint can estimate a meal from a photo, read a nutrition label, estimate from a description, and run the AI coach review, all without leaving the app. The key stays in Cloudflare; the app only ever talks to your Worker.
+
+1. **Get an API key** (separate from any ChatGPT subscription). Any one of:
+   - **Groq** (console.groq.com → API Keys): fast, with a free tier. Text tasks (describe a meal, the AI coach) use `openai/gpt-oss-120b`. Groq's gpt-oss models can't see images, so photos go to a Groq vision model (`qwen/qwen3.8-27b` at the time of writing; it's a *preview* model and Groq may withdraw it at short notice).
+   - **OpenAI** (platform.openai.com): add credit, **set a monthly budget limit**, create a key.
+   - **Google Gemini** (aistudio.google.com): has a free tier; on it, Google may use what you send to improve its products.
+2. **Add it to the Worker:** Settings → Variables and Secrets → Add → type **Secret**, name `GROQ_API_KEY`, `OPENAI_API_KEY` or `GEMINI_API_KEY`, paste the key. You can add more than one. With several, the Worker routes each job to the best fit:
+   - **Text jobs** (describe a meal, AI coach): Groq, else OpenAI, else Gemini.
+   - **Photo jobs** (meal photo, nutrition label): Gemini, else OpenAI, else Groq.
+
+   So **Groq + Gemini** gives you Groq's fast gpt-oss for text and Gemini's vision for photos. Override with Text variables `AI_TEXT_PROVIDER` / `AI_VISION_PROVIDER` set to `groq`, `openai` or `gemini`.
+3. **Paste the new `worker.js`** (version 1.1.0 or later) into the Worker editor and Deploy. Open the Worker address; `"ai"` shows what's active, e.g. `"groq+gemini"` (text + photos).
+4. **Optional model settings** (type Text):
+   - `AI_MODEL`: the text model. Defaults: `openai/gpt-oss-120b` (Groq), `gpt-4o-mini` (OpenAI), `gemini-flash-latest` (Gemini).
+   - `AI_VISION_MODEL`: the photo model. Defaults: `qwen/qwen3.8-27b` (Groq, a preview model that may be withdrawn), `gpt-4o-mini` (OpenAI), `gemini-flash-latest` (Gemini, an alias that always points at Google's current Flash model).
+   - `AI_DAILY_LIMIT`: maximum AI calls per day across all providers, default 60.
+5. In Setpoint, open More → Sync & Apple Health; the card shows **AI: OpenAI** once it's picked up.
+
+**What it costs:** each photo is one request. On the small models that's a fraction of a US cent; a coach review (a long report) is a few cents. Check the provider's current prices and keep the budget limit on.
+
+**What gets sent:** the photo (shrunk to about 1280 px) or the text you typed, or for the coach, the report you chose. Nothing else from your data.
+
 ## Setup from the command line (alternative)
 
 ```
@@ -52,5 +76,6 @@ Edit `ALLOWED_ORIGINS` in `wrangler.toml` first if your Pages address differs.
 | POST | `/inbox` | inbox or app | `{date, weight, bodyFat, steps}` or an array of them. Accepts `85.6`, `"85.6 kg"`, `"188 lb"`, body fat as `0.32` or `32` |
 | GET | `/inbox` | app | Pending readings |
 | DELETE | `/inbox` | app | `{keys:[...]}`: clear readings the app has applied |
+| POST | `/ai` | app | `{task, prompt, image?}` → `{text, model, used, limit}`. Needs `GROQ_API_KEY`, `OPENAI_API_KEY` or `GEMINI_API_KEY` |
 
 Send keys as `Authorization: Bearer <key>`.
