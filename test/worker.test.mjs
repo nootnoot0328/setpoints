@@ -69,4 +69,59 @@ await test("CORS only reflects the allowed origin", async () => {
   const bad = await call(env(), "GET", "/", { origin: "https://evil.example" });
   assert.notStrictEqual(bad.headers.get("Access-Control-Allow-Origin"), "https://evil.example");
 });
+
+await test("AI: needs the app key, a provider, and respects the daily limit", async () => {
+  const e = env();
+  assert.strictEqual((await call(e, "POST", "/ai", { body: { prompt: "hi" } })).status, 401);
+  assert.strictEqual((await call(e, "POST", "/ai", { key: "app-secret-123", body: { prompt: "hi" } })).status, 501);
+  let sent = null;
+  e.OPENAI_API_KEY = "sk-test"; e.AI_DAILY_LIMIT = "2";
+  e.FETCH = async (url, opt) => { sent = { url, body: JSON.parse(opt.body), auth: opt.headers.Authorization };
+    return new Response(JSON.stringify({ model: "gpt-x", choices: [{ message: { content: "SETPOINT\nRice | 1 | 300 | 5 | 1 | 65" } }] }), { status: 200 }); };
+  const img = "data:image/jpeg;base64,/9j/AAAA";
+  const r = await call(e, "POST", "/ai", { key: "app-secret-123", body: { task: "food", prompt: "estimate", image: img } });
+  assert.strictEqual(r.status, 200); assert.ok(r.data.text.startsWith("SETPOINT"));
+  assert.strictEqual(sent.auth, "Bearer sk-test");
+  assert.strictEqual(sent.body.messages[0].content[1].image_url.url, img);
+  assert.strictEqual((await call(e, "POST", "/ai", { key: "app-secret-123", body: { prompt: "again" } })).status, 200);
+  assert.strictEqual((await call(e, "POST", "/ai", { key: "app-secret-123", body: { prompt: "third" } })).status, 429);
+  assert.strictEqual((await call(e, "POST", "/ai", { key: "app-secret-123", body: { prompt: "x", image: "http://evil/x.png" } })).status, 400);
+  assert.strictEqual((await call(e, "GET", "/")).data.ai, "openai");
+});
+await test("AI: Gemini request shape", async () => {
+  const e = env(); e.GEMINI_API_KEY = "g-test"; let sent = null;
+  e.FETCH = async (url, opt) => { sent = { url, body: JSON.parse(opt.body), key: opt.headers["x-goog-api-key"] };
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "ok" }] } }] }), { status: 200 }); };
+  const r = await call(e, "POST", "/ai", { key: "app-secret-123", body: { prompt: "read", image: "data:image/png;base64,iVBOR" } });
+  assert.strictEqual(r.data.text, "ok"); assert.strictEqual(sent.key, "g-test");
+  assert.ok(sent.url.includes(":generateContent")); assert.strictEqual(sent.body.contents[0].parts[1].inline_data.mime_type, "image/png");
+});
+
+await test("AI: Groq uses gpt-oss for text and a vision model for photos, strips thinking", async () => {
+  const e = env(); e.GROQ_API_KEY = "gsk-test"; const seen = [];
+  e.FETCH = async (url, opt) => { const b = JSON.parse(opt.body); seen.push({ url, model: b.model, auth: opt.headers.Authorization, img: Array.isArray(b.messages[0].content) });
+    return new Response(JSON.stringify({ choices: [{ message: { content: "<think>hmm</think>\nSETPOINT ok" } }] }), { status: 200 }); };
+  assert.strictEqual((await call(e, "GET", "/")).data.ai, "groq");
+  const a = await call(e, "POST", "/ai", { key: "app-secret-123", body: { prompt: "coach me" } });
+  const b = await call(e, "POST", "/ai", { key: "app-secret-123", body: { prompt: "photo", image: "data:image/jpeg;base64,/9j/AA" } });
+  assert.strictEqual(a.data.text, "SETPOINT ok");
+  assert.ok(seen[0].url.startsWith("https://api.groq.com/openai/v1/chat/completions"));
+  assert.strictEqual(seen[0].model, "openai/gpt-oss-120b"); assert.strictEqual(seen[0].img, false);
+  assert.strictEqual(seen[1].model, "qwen/qwen3.8-27b"); assert.strictEqual(seen[1].img, true);
+  assert.strictEqual(seen[0].auth, "Bearer gsk-test");
+});
+
+await test("AI: Groq + Gemini together: text to Groq, photos to Gemini", async () => {
+  const e = env(); e.GROQ_API_KEY = "gsk"; e.GEMINI_API_KEY = "g"; const seen = [];
+  e.FETCH = async (url, opt) => { seen.push(url);
+    const body = url.includes("groq") ? { choices: [{ message: { content: "text ok" } }] } : { candidates: [{ content: { parts: [{ text: "photo ok" }] } }] };
+    return new Response(JSON.stringify(body), { status: 200 }); };
+  assert.strictEqual((await call(e, "GET", "/")).data.ai, "groq+gemini");
+  assert.strictEqual((await call(e, "POST", "/ai", { key: "app-secret-123", body: { prompt: "coach" } })).data.text, "text ok");
+  assert.strictEqual((await call(e, "POST", "/ai", { key: "app-secret-123", body: { prompt: "p", image: "data:image/jpeg;base64,/9j/AA" } })).data.text, "photo ok");
+  assert.ok(seen[0].includes("api.groq.com")); assert.ok(seen[1].includes("gemini-flash-latest:generateContent"));
+  e.AI_VISION_PROVIDER = "groq";
+  await call(e, "POST", "/ai", { key: "app-secret-123", body: { prompt: "p", image: "data:image/jpeg;base64,/9j/AA" } });
+  assert.ok(seen[2].includes("api.groq.com"));
+});
 console.log(`\n${pass} passed`);
