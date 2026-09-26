@@ -946,7 +946,7 @@
       row("fork", "My foods", `${S.custom.length} saved`, () => push({ v: "foods" })),
       h("button", { class: "row", onclick: () => push({ v: "sync" }) }, h("span", { class: "ri", html: svg(I.sync) }),
         h("span", { class: "rt" }, h("b", null, "Sync & Apple Health"), h("span", { "data-syncstatus": "" }, syncLabel())), h("span", { html: svg(I.chev, "chev") })),
-      row("spark", "AI coach report", "Export a date range for ChatGPT or Claude", () => push({ v: "report" })),
+      row("spark", "AI coach report", aiReady() ? "Ask your AI coach, or export for ChatGPT" : "Export a date range for ChatGPT or Claude", () => push({ v: "report" })),
       row("share", "Back up now", S.settings.lastExport ? `Last backup ${dShort(S.settings.lastExport)}` : "Not backed up yet", () => shareBackup()),
       row("data", "Your data", "Export, import, reminders", () => push({ v: "data" })),
       row("book", "How it works", "The method and its sources", () => push({ v: "method" })),
@@ -1296,7 +1296,17 @@
       h("div", { class: "divider" }),
       h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: RP.food ? true : null, onchange: e => { RP.food = e.target.checked; render(false); } }), h("span", null, h("b", null, "Include every food item"), h("span", null, "Lets the coach suggest specific swaps. Turn off for long periods to keep it short."))),
       h("label", { class: "tgl" }, h("input", { type: "checkbox", checked: RP.prompt ? true : null, onchange: e => { RP.prompt = e.target.checked; render(false); } }), h("span", null, h("b", null, "Include the trainer prompt"), h("span", null, "Turn off if you're adding to an existing chat.")))));
-    root.append(h("button", { class: "btn primary block", style: { marginTop: "14px", height: "54px" }, onclick: () => {
+    if (aiReady()) root.append(h("button", { class: "btn primary block", style: { marginTop: "14px", height: "54px" }, disabled: RP.busy ? true : null, onclick: async () => {
+      RP.busy = true; render(false);
+      try {
+        const text = await aiCall("coach", (RP.prompt ? "" : E.COACH_PROMPT) + body, null, 3500);
+        const rec = { at: Date.now(), from: RP.from, to: RP.to, text };
+        try { localStorage.setItem("setpoint.coach", JSON.stringify(rec)); } catch (e) { }
+        RP.busy = false; push({ v: "coach" });
+      } catch (e) { RP.busy = false; render(false); toast(e.message); }
+    } }, h("span", { html: svg(I.spark) }), RP.busy ? "Your coach is reading…" : "Ask the AI coach"));
+    if (RP.busy) root.append(h("div", { class: "aispin" }, h("i"), h("i"), h("i")));
+    root.append(h("button", { class: "btn " + (aiReady() ? "" : "primary ") + "block", style: { marginTop: "10px", height: "54px" }, onclick: () => {
       const done = () => toast("Report copied. Paste it into your AI chat.");
       if (navigator.clipboard) navigator.clipboard.writeText(body).then(done).catch(() => { pre.focus(); toast("Select the preview and copy it"); });
       else toast("Select the preview and copy it");
@@ -1312,6 +1322,33 @@
     const pre = h("pre", { class: "rpre", tabindex: "0" }, body);
     root.append(pre);
     root.append(h("p", { class: "note" }, "The report leaves your phone only when you paste or share it. Chat apps may keep what you send. Leave out anything you'd rather not share."));
+    return root;
+  }
+
+  function viewCoach() {
+    const root = h("div");
+    root.append(subhead("AI coach"));
+    let rec = null; try { rec = JSON.parse(localStorage.getItem("setpoint.coach") || "null"); } catch (e) { }
+    if (!rec) { root.append(h("div", { class: "empty-state" }, "No review yet. Run one from More → AI coach report.")); return root; }
+    root.append(h("p", { class: "note", style: { marginTop: "-4px" } }, `Review of ${dLong(rec.from)} to ${dLong(rec.to)} · ${new Date(rec.at).toLocaleString([], { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}`));
+    const plan = E.parseAiPlan(rec.text);
+    const prose = rec.text.replace(/```[\s\S]*?```/g, "").replace(/SETPOINT PLAN[\s\S]*$/, "").trim();
+    const card = h("div", { class: "card coach" });
+    for (const raw of prose.split(/\n/)) {
+      const l = raw.trim(); if (!l) continue;
+      const fmt = t => t.split(/(\*\*[^*]+\*\*)/).map(p => /^\*\*.*\*\*$/.test(p) ? h("b", null, p.slice(2, -2)) : p);
+      if (/^#{1,4}\s/.test(l)) card.append(h("h3", null, l.replace(/^#+\s*/, "").replace(/\*\*/g, "")));
+      else if (/^\d+[.)]\s/.test(l) && l.length < 80 && !/[.:]\s\S/.test(l.replace(/^\d+[.)]\s/, ""))) card.append(h("h3", null, l.replace(/\*\*/g, "")));
+      else if (/^[-*•]\s/.test(l)) card.append(h("div", { class: "cli" }, ...fmt(l.replace(/^[-*•]\s/, ""))));
+      else card.append(h("p", null, ...fmt(l)));
+    }
+    root.append(card);
+    if (plan.days.length) root.append(h("div", { class: "card", style: { marginTop: "12px" } },
+      h("h3", { class: "ctitle" }, `Suggested program: ${plan.days.length} days`),
+      h("p", { class: "note" }, plan.days.map(d => `${d.name}: ${d.slots.map(x => x.name).join(", ")}`).join(" · ")),
+      h("button", { class: "btn primary block", onclick: () => { go("train"); setTimeout(() => TR.openPlanImport(rec.text), 30); } }, "Review and import this plan")));
+    root.append(h("button", { class: "btn block", style: { marginTop: "12px" }, onclick: () => { if (navigator.clipboard) navigator.clipboard.writeText(rec.text).then(() => toast("Copied")); } }, h("span", { html: svg(I.copy) }), "Copy the full reply"));
+    root.append(h("p", { class: "note" }, "An AI's reading of your numbers, not a professional's. Sanity-check big changes, especially anything below your resting rate or a sudden jump in training volume."));
     return root;
   }
 
@@ -1433,7 +1470,7 @@
     return root;
   }
 
-  const SCREENS = { report: (...a) => viewReport(...a), detail: viewDetail, body: viewBody, calendar: viewCalendar, profile: viewProfile, program: viewProgram, foods: viewFoods, data: viewData, method: viewMethod,
+  const SCREENS = { report: (...a) => viewReport(...a), coach: (...a) => viewCoach(...a), detail: viewDetail, body: viewBody, calendar: viewCalendar, profile: viewProfile, program: viewProgram, foods: viewFoods, data: viewData, method: viewMethod,
     sync: (...a) => viewSync(...a), shortcut: (...a) => viewShortcut(...a) };
   // training screens are added at boot, once the module is initialised
 
@@ -1582,7 +1619,7 @@
 
   function logSheet(opt) {
     opt = opt || {};
-    const st = { tab: opt.tab || "search", hour: opt.hour ?? (SEL === today() ? new Date().getHours() : 12), q: "" };
+    const st = { tab: opt.tab || "search", hour: opt.hour ?? (SEL === today() ? new Date().getHours() : 12), q: "", aiMode: opt.aiMode || "meal", barcode: opt.barcode || null };
     openSheet(sh => {
       const top = h("div", { class: "sheet-top" });
       const tabs = h("div", { class: "tabs", role: "tablist" });
@@ -1690,6 +1727,62 @@
           const ta = h("textarea", { class: "inp aipaste", rows: 5, placeholder: "Paste ChatGPT's SETPOINT block here", value: st.ai.text,
             oninput: e => { st.ai.text = e.target.value; st.ai.off = new Set(); paintAi(); } });
           ta.value = st.ai.text;
+          const direct = h("div");
+          const paintDirect = () => {
+            direct.innerHTML = "";
+            if (!aiReady()) return;
+            const busy = st.aiBusy;
+            direct.append(h("div", { class: "aimode" }, seg(["Meal photo", "Nutrition label", "Describe it"], ["meal", "label", "text"].indexOf(st.aiMode), i => { st.aiMode = ["meal", "label", "text"][i]; st.label = null; paintDirect(); }, "sm")));
+            if (st.barcode && st.aiMode === "label") direct.append(h("p", { class: "note", style: { margin: "8px 0 0" } }, `Barcode ${st.barcode} will be saved with it, so the next scan finds it instantly.`));
+            const run = async (task, prompt, image, tok) => {
+              st.aiBusy = true; paintDirect();
+              try {
+                const text = await aiCall(task, prompt, image, tok);
+                if (task === "label") { st.label = E.parseLabel(text); if (!st.label) throw new Error("Couldn't read the panel. Try a straighter, closer photo."); st.labelQty = 1; }
+                else { st.ai.text = text; ta.value = text; st.ai.off = new Set(); if (!E.parseAiEstimate(text).items.length) throw new Error("The AI didn't return anything usable. Try again."); }
+              } catch (e) { toast(e.message); }
+              st.aiBusy = false; paintDirect(); paintAi();
+            };
+            const pick = h("input", { type: "file", accept: "image/*", hidden: true, onchange: async e => {
+              const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+              try { const img = await photoToDataUrl(f); run(st.aiMode === "label" ? "label" : "food", st.aiMode === "label" ? E.LABEL_PROMPT : E.AI_PROMPT, img); } catch (err) { toast(err.message); }
+            } });
+            if (st.aiMode === "text") {
+              const dv = h("textarea", { class: "inp aipaste", rows: 3, placeholder: "e.g. chicken rice, extra rice, and a kopi siew dai", style: { fontFamily: "inherit", marginTop: "10px" }, value: st.desc || "", oninput: e => st.desc = e.target.value });
+              dv.value = st.desc || "";
+              direct.append(dv, h("button", { class: "btn primary block", style: { marginTop: "10px" }, disabled: busy ? true : null, onclick: () => { if ((st.desc || "").trim().length < 3) { toast("Describe what you ate"); return; } run("text", E.DESCRIBE_PROMPT(st.desc.trim()), null); } }, busy ? "Estimating…" : "Estimate"));
+            } else {
+              direct.append(pick, h("button", { class: "btn primary block aishot", disabled: busy ? true : null, onclick: () => pick.click() },
+                h("span", { html: svg(I.camera) }), busy ? (st.aiMode === "label" ? "Reading the label…" : "Estimating…") : st.aiMode === "label" ? "Photograph the nutrition label" : "Take or choose a photo"));
+            }
+            if (busy) direct.append(h("div", { class: "aispin" }, h("i"), h("i"), h("i")));
+            // label result
+            if (st.aiMode === "label" && st.label && !busy) {
+              const L = st.label, q = st.labelQty || 1;
+              const nameIn = h("input", { class: "inp", type: "text", value: L.name || "", oninput: e => L.name = e.target.value });
+              nameIn.value = L.name || "";
+              const tot = k => r1(L.perServing[k] * q);
+              const saveBox = h("input", { type: "checkbox", checked: true });
+              direct.append(h("div", { class: "card labelres" },
+                field("Product", nameIn),
+                h("div", { class: "muted small", style: { marginTop: "8px" } }, `Per serving · ${L.serving || "1 serving"}: ${f0(L.perServing.kcal)} kcal · P ${L.perServing.p} · F ${L.perServing.f} · C ${L.perServing.c}`),
+                h("div", { class: "lbl" }, "Servings you had"),
+                h("div", { class: "daychips" }, [0.5, 1, 1.5, 2, 3].map(v => h("button", { class: "chip" + (q === v ? " on" : ""), onclick: () => { st.labelQty = v; paintDirect(); } }, String(v)))),
+                h("div", { class: "fit-mac", style: { marginTop: "2px" } }, h("span", { class: "k" }, f0(tot("kcal")), h("small", null, " kcal")),
+                  ...MAC.filter(m => m.k !== "kcal").map(m => h("span", null, h("em", { style: { color: m.color } }, m.short), tot(m.k), "g"))),
+                h("label", { class: "tgl" }, saveBox, h("span", null, h("b", null, "Save to My Foods"), h("span", null, st.barcode ? "With its barcode, so scanning it next time is instant." : "So you can find it by name next time."))),
+                h("button", { class: "btn primary block", style: { marginTop: "10px" }, onclick: () => {
+                  const food = { id: uid(), n: (L.name || "Product").trim(), kcal: r0(L.perServing.kcal), p: L.perServing.p, f: L.perServing.f, c: L.perServing.c,
+                    unit: L.serving || "serving", g: L.grams || 0, tag: "custom", barcode: st.barcode || null, src: "label" };
+                  if (saveBox.checked) { S.custom = S.custom.filter(x => !(food.barcode && x.barcode === food.barcode)); S.custom.unshift(food); }
+                  addEntry(food, q, null, true); save(); paintTop(); LOGGED = true;
+                  toast(`Logged ${food.n} · ${f0(food.kcal * q)} kcal${saveBox.checked ? " · saved" : ""}`);
+                  st.label = null; st.barcode = null; paintDirect();
+                } }, `Log ${q} serving${q === 1 ? "" : "s"}`)));
+            }
+            direct.append(h("div", { class: "divider" }));
+          };
+          paintDirect();
           const paintAi = () => {
             out.innerHTML = "";
             if (!st.ai.text.trim()) return;
@@ -1711,6 +1804,8 @@
             } }, `Log ${on.length} item${on.length === 1 ? "" : "s"} · ${r0(sum.kcal)} kcal`));
           };
           body.append(
+            direct,
+            aiReady() ? h("div", { class: "lbl", style: { marginTop: 0 } }, "Or use ChatGPT yourself") : null,
             h("div", { class: "aistep" }, h("i", null, "1"), h("div", null, h("b", null, "Copy the prompt"), h("span", null, "It tells ChatGPT (or Claude, Gemini) to reply in a format Setpoint can read."))),
             h("div", { style: { display: "flex", gap: "8px", margin: "8px 0 14px 40px" } },
               h("button", { class: "btn sm", onclick: () => { (navigator.clipboard ? navigator.clipboard.writeText(E.AI_PROMPT) : Promise.reject()).then(() => toast("Prompt copied")).catch(() => { ta.value = E.AI_PROMPT; ta.select(); toast("Select all and copy it from the box"); }); } }, "Copy prompt"),
@@ -1745,7 +1840,7 @@
             } }, "Log"));
         } else if (st.tab === "scan") {
           foot.hidden = true;
-          scanPane(body, f => portion(f));
+          scanPane(body, f => portion(f), code => { st.tab = "ai"; st.aiMode = "label"; st.barcode = code; paintTabs(); paintBody(); });
         }
       };
 
@@ -2060,7 +2155,7 @@
       const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s);
     });
   }
-  function scanPane(body, onFood) {
+  function scanPane(body, onFood, onLabel) {
     const status = h("div", { class: "muted", style: { marginTop: "12px", minHeight: "22px" } });
     const video = h("video", { playsinline: true, muted: true, autoplay: true });
     const box = h("div", { class: "scanbox" }, video, h("div", { class: "frame" }), h("div", { class: "laser" }));
@@ -2094,7 +2189,8 @@
       } catch (e) {
         status.innerHTML = "";
         status.append(`No match for ${code} in Open Food Facts. `,
-          h("button", { class: "link", style: { fontSize: "15px" }, onclick: () => foodForm({ n: "", barcode: code }) }, "Add it yourself"));
+          aiReady() && onLabel ? h("button", { class: "btn sm primary", style: { margin: "0 8px 0 0" }, onclick: () => onLabel(code) }, "Read the label with AI") : null,
+          h("button", { class: "link", style: { fontSize: "15px" }, onclick: () => foodForm({ n: "", barcode: code }) }, aiReady() ? "or type it in" : "Add it yourself"));
       }
     };
     (async () => {
@@ -2140,6 +2236,38 @@
   const SKEY = "setpoint.sync";
   let SC = (() => { try { return JSON.parse(localStorage.getItem(SKEY) || "{}"); } catch (e) { return {}; } })();
   const saveSC = () => { try { localStorage.setItem(SKEY, JSON.stringify(SC)); } catch (e) { } };
+
+  /* ---------- AI through the Worker (the API key lives in Cloudflare) ---------- */
+  const aiReady = () => !!(SC.url && SC.appKey && SC.ai);
+  async function aiCall(task, prompt, image, maxTokens) {
+    if (!SC.url || !SC.appKey) throw new Error("Connect your Worker first (More → Sync & Apple Health).");
+    const r = await fetch(SC.url.replace(/\/+$/, "") + "/ai", {
+      method: "POST", headers: { "Authorization": "Bearer " + SC.appKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ task, prompt, image: image || undefined, maxTokens })
+    }).catch(() => { throw new Error(navigator.onLine === false ? "You're offline." : "Couldn't reach your Worker."); });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `AI request failed (${r.status})`);
+    SC.aiUsed = d.used; SC.aiLimit = d.limit; saveSC();
+    return d.text || "";
+  }
+  async function refreshAi() {
+    if (!SC.url) return;
+    try { const r = await fetch(SC.url.replace(/\/+$/, "") + "/", { cache: "no-store" }); const j = await r.json(); if (j && j.service === "setpoint-sync") { SC.ai = j.ai || null; saveSC(); } } catch (e) { }
+  }
+  // shrink a photo to ~1280 px JPEG so it uploads fast and costs little
+  function photoToDataUrl(file) {
+    return new Promise((res, rej) => {
+      const url = URL.createObjectURL(file), img = new Image();
+      img.onload = () => {
+        const k = Math.min(1, 1280 / Math.max(img.naturalWidth, img.naturalHeight));
+        const c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url); res(c.toDataURL("image/jpeg", 0.82));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("Couldn't read that photo.")); };
+      img.src = url;
+    });
+  }
   let CKEY = null, SYNCING = false, syncT = null;
   function idb() {
     return new Promise((res, rej) => {
@@ -2226,7 +2354,8 @@
         copyRow("Inbox address", (SC.url || "").replace(/\/+$/, "") + "/inbox"),
         h("button", { class: "btn block", style: { marginTop: "12px" }, onclick: () => push({ v: "shortcut" }) }, "Set up the Shortcut")));
       root.append(section("This device"));
-      root.append(h("div", { class: "card" }, kv("Worker", (SC.url || "").replace(/^https?:\/\//, "")), kv("Cloud version", SC.ver || "—"), kv("Encryption", "AES-GCM 256, key from your passphrase")));
+      root.append(h("div", { class: "card" }, kv("Worker", (SC.url || "").replace(/^https?:\/\//, "")), kv("Cloud version", SC.ver || "—"), kv("Encryption", "AES-GCM 256, key from your passphrase"),
+        kv("AI", SC.ai ? `${String(SC.ai).split("+").map(p => ({ openai: "OpenAI", gemini: "Gemini", groq: "Groq" })[p] || p).join(" (text) + ")}${String(SC.ai).includes("+") ? " (photos)" : ""}${SC.aiUsed != null ? ` · ${SC.aiUsed}/${SC.aiLimit} today` : ""}` : "Not set up (see worker/README.md)")));
     }
     return root;
   }
@@ -2245,6 +2374,7 @@
       const info = await cli.ping();
       if (!info || info.service !== "setpoint-sync") throw new Error("That address isn't a Setpoint Worker.");
       if (!info.configured) throw new Error("The Worker is missing its secrets or KV binding. See worker/README.md.");
+      SC.ai = info.ai || null;
       const cur = await cli.getState();
       const salt = cur.blob ? cur.blob.salt : Y.randomB64(16);
       const key = await Y.deriveKey(f.pass, salt);
@@ -2320,6 +2450,7 @@
     });
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { }
     if (SC.enabled) setTimeout(() => runSync("open"), 600);
+    if (SC.url) setTimeout(refreshAi, 1500);
     currentVersion().then(v => { UPD.current = v; if (TAB === "more") render(false); });
     setTimeout(() => checkUpdate(false), 2500);
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && Date.now() - UPD.checked > 6 * 36e5) checkUpdate(false); });

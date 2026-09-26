@@ -1019,7 +1019,7 @@
 
     return {
       viewTrain, bodyMap, screens: { workout: viewWorkout, hiit: viewHiit, library: viewLibrary, trainhist: viewHist, freestyle: viewFreestyle, planimport: viewPlanImport },
-      dashTiles, seed, ensureAll, openFreestyle: () => X.push({ v: "freestyle" }), startNext: () => { const tr = T(); if (tr.active) X.push({ v: "workout" }); else if (tr.plan) startWorkout(tr.plan.next % tr.plan.days.length); else { X.go("train"); planWizard(); } },
+      dashTiles, seed, ensureAll, openFreestyle: () => X.push({ v: "freestyle" }), openPlanImport: text => { PI.text = text || ""; PI.pick = {}; X.push({ v: "planimport" }); }, startNext: () => { const tr = T(); if (tr.active) X.push({ v: "workout" }); else if (tr.plan) startWorkout(tr.plan.next % tr.plan.days.length); else { X.go("train"); planWizard(); } },
       stopAll: () => { stopRest(); }
     };
   };

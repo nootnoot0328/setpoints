@@ -977,6 +977,48 @@ CONFIDENCE | <low/medium/high> | <likely error, e.g. ±25%>
 NOTES | <one short line: assumptions I should check>
 
 Use whole numbers only, one line per item.`;
+  const DESCRIBE_PROMPT = d => AI_PROMPT.replace("from a food photo", "from a description of a meal").replace(" unless the photo clearly shows otherwise", "").replace(/\n\nHow to estimate:[\s\S]*?\n\nReply/, `
+
+What I ate: ${d}
+
+Estimate each item at a typical Singapore portion unless I gave an amount. Include drinks and sauces I mention. If something is vague, pick the most likely version and say so in NOTES.
+
+Reply`);
+  const LABEL_PROMPT = `This photo shows a food product's nutrition information panel. Read it exactly; do not estimate.
+
+Rules:
+- Use the per-serving column if there is one, otherwise per 100 g / 100 ml.
+- If energy is only in kJ, convert to kcal (divide by 4.184).
+- "Total fat" is fat; "carbohydrate" is total carbohydrate (not just sugars).
+- Include the brand and product name if visible on the photo.
+- If a number is unreadable, write ? for it.
+
+Reply with ONLY this, inside one code block:
+
+SETPOINT LABEL
+NAME | <brand and product>
+SERVING | <serving size as printed, e.g. 30 g or 1 can (240 ml)> | <grams or ml as a number>
+PER SERVING | <kcal> | <protein g> | <fat g> | <carbs g>
+PER 100 | <kcal> | <protein g> | <fat g> | <carbs g>`;
+  function parseLabel(text) {
+    const out = { name: "", serving: "", grams: null, perServing: null, per100: null };
+    for (let line of String(text || "").split(/\r?\n/)) {
+      line = line.trim().replace(/^\|/, "").replace(/\|$/, "");
+      const c = line.split("|").map(x => x.trim().replace(/[*_`]/g, ""));
+      const k = (c[0] || "").toUpperCase();
+      const nums = () => { const n = c.slice(1, 5).map(aiNum); return n.every(x => x != null) ? { kcal: n[0], p: n[1], f: n[2], c: n[3] } : null; };
+      if (k === "NAME") out.name = c.slice(1).join(" ").trim();
+      else if (k === "SERVING") { out.serving = c[1] || ""; out.grams = aiNum(c[2]) || aiNum(c[1]); }
+      else if (k === "PER SERVING") out.perServing = nums();
+      else if (k === "PER 100" || k === "PER 100G" || k === "PER 100 G") out.per100 = nums();
+    }
+    if (!out.perServing && out.per100 && out.grams) {
+      const r = out.grams / 100; out.perServing = { kcal: out.per100.kcal * r, p: out.per100.p * r, f: out.per100.f * r, c: out.per100.c * r };
+    }
+    if (!out.perServing && out.per100) { out.perServing = out.per100; out.serving = out.serving || "100 g"; out.grams = out.grams || 100; }
+    if (out.perServing) for (const k of ["kcal", "p", "f", "c"]) out.perServing[k] = Math.round(out.perServing[k] * 10) / 10;
+    return out.perServing ? out : null;
+  }
   function aiNum(s) {
     s = String(s || "").replace(/,/g, "").trim();
     const r = s.match(/(-?\d+(?:\.\d+)?)\s*(?:-|–|to)\s*(\d+(?:\.\d+)?)/);
@@ -1079,7 +1121,7 @@ Use whole numbers only, one line per item.`;
   const PAT_GROUP_REGION = { squat: "quads", lunge: "quads", hinge: "hamstrings", hpush: "chest", vpush: "shoulders", delts: "shoulders", hpull: "upperback", vpull: "lats", core: "abs", bi: "biceps", tri: "triceps", calves: "calves" };
 
   return {
-    REGION, REGION_NAME, muscleToRegion, pickForMuscles, freestyleScheme, muscleSets, recovery, suggestRegions, RECOVER_H, PAT_GROUP_REGION, AI_PROMPT, parseAiEstimate, COACH_PROMPT, buildReport, suggestFits, fitsRemaining, FIT_SLOTS: SLOTS, slotFor, parseAiPlan, matchExercise,
+    REGION, REGION_NAME, muscleToRegion, pickForMuscles, freestyleScheme, muscleSets, recovery, suggestRegions, RECOVER_H, PAT_GROUP_REGION, AI_PROMPT, parseAiEstimate, DESCRIBE_PROMPT, LABEL_PROMPT, parseLabel, COACH_PROMPT, buildReport, suggestFits, fitsRemaining, FIT_SLOTS: SLOTS, slotFor, parseAiPlan, matchExercise,
     energyDensity, kalmanRun, packageKalman, estimateKalman, estimateWindow, KF,
     TEMPLATES, pickExercise, alternatives, buildPlan, nextTarget, applyRating, weeklySets, sessionKcal, PAT_GROUP,
     clamp, r0, r1, isoDate, parse, today, addDays, daysBetween, weekday, isWeekend, weekStart, range,
