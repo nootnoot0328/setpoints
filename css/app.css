@@ -731,3 +731,18 @@ body.onb #app{padding-bottom:40px}
 .obmac b{display:block;font-size:24px;font-weight:700}
 .obmac small{font-size:14px;font-weight:500;margin-left:1px}
 .obmac span{font-size:13px;color:var(--muted)}
+.aimode{display:grid}
+.aimode .seg{display:grid}
+.aishot{height:56px;margin-top:12px}
+.aishot span{display:inline-flex}
+.aishot svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;margin-right:8px}
+.aispin{display:flex;justify-content:center;gap:6px;padding:14px 0 4px}
+.aispin i{width:8px;height:8px;border-radius:50%;background:var(--kcal);animation:aib 1s ease-in-out infinite}
+.aispin i:nth-child(2){animation-delay:.15s}.aispin i:nth-child(3){animation-delay:.3s}
+@keyframes aib{0%,80%,100%{transform:scale(.5);opacity:.4}40%{transform:scale(1);opacity:1}}
+.labelres{margin-top:12px}
+.coach h3{font-size:17px;font-weight:700;margin:16px 0 6px}
+.coach h3:first-child{margin-top:0}
+.coach p{margin:0 0 10px;line-height:1.5;font-size:15.5px}
+.coach .cli{position:relative;padding-left:16px;margin:0 0 7px;line-height:1.45;font-size:15.5px}
+.coach .cli::before{content:"";position:absolute;left:3px;top:.62em;width:5px;height:5px;border-radius:50%;background:var(--muted)}
