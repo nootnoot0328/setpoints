@@ -44,6 +44,12 @@ With an AI key on the Worker, Setpoint can estimate a meal from a photo, read a 
 
 **What gets sent:** the photo (shrunk to about 1280 px) or the text you typed, or for the coach, the report you chose. Nothing else from your data.
 
+## Optional: bank alerts for Budget Margin
+
+Budget Margin (same GitHub Pages site) can collect card and bank alerts from this Worker. An iOS Shortcut automation posts each alert SMS or email to `/capture` with the **inbox key**. Budget Margin collects them with the **app key** when it opens, puts them in its "to confirm" inbox, and deletes them from the Worker. Alerts sit here as plain text (like the Health inbox readings) until collected, for 30 days at most.
+
+Needs `worker.js` version 1.3.0 or later: paste it into the Worker editor and Deploy. Nothing else changes.
+
 ## Setup from the command line (alternative)
 
 ```
@@ -76,6 +82,9 @@ Edit `ALLOWED_ORIGINS` in `wrangler.toml` first if your Pages address differs.
 | POST | `/inbox` | inbox or app | `{date, weight, bodyFat, steps}` or an array of them. Accepts `85.6`, `"85.6 kg"`, `"188 lb"`, body fat as `0.32` or `32` |
 | GET | `/inbox` | app | Pending readings |
 | DELETE | `/inbox` | app | `{keys:[...]}`: clear readings the app has applied |
+| POST | `/capture` | inbox or app | `{text, app?, ts?}` or plain text: a bank alert for Budget Margin |
+| GET | `/capture` | app | Pending alerts |
+| DELETE | `/capture` | app | `{keys:[...]}`: clear collected alerts |
 | POST | `/ai` | app | `{task, prompt, image?}` → `{text, model, used, limit}`. Needs `GROQ_API_KEY`, `OPENAI_API_KEY` or `GEMINI_API_KEY` |
 
 Send keys as `Authorization: Bearer <key>`.

@@ -21,6 +21,11 @@
      POST   /inbox            reading or [readings]          (INBOX_KEY or APP_KEY)
      GET    /inbox            → { items: [...] }             (APP_KEY)
      DELETE /inbox            { keys: [...] }                (APP_KEY)
+     POST   /capture          { text, app?, ts? } or plain text   (INBOX_KEY or APP_KEY)
+                              A bank SMS/email alert for Budget Margin. Stored as-is
+                              for up to 30 days until the app collects it.
+     GET    /capture          → { items: [...] }             (APP_KEY)
+     DELETE /capture          { keys: [...] }                (APP_KEY)
      POST   /ai               { task, prompt, image? } → { text, model }  (APP_KEY)
                               Relays one request to OpenAI or Gemini using a key
                               kept here as a secret; the app never sees it.
@@ -36,11 +41,13 @@
      AI_DAILY_LIMIT    max AI calls per day, default 60 (a spending brake)
    ========================================================================== */
 
-const VERSION = "1.1.0";
+const VERSION = "1.3.0";
 const MAX_IMAGE_CHARS = 3_000_000;   // ~2.2 MB of JPEG as base64
 const MAX_PROMPT_CHARS = 80_000;
 const MAX_STATE_BYTES = 8 * 1024 * 1024;
 const INBOX_TTL = 60 * 60 * 24 * 30;
+const MAX_CAPTURES = 200;
+const MAX_CAPTURE_CHARS = 2000;
 
 export default {
   async fetch(req, env) {
@@ -109,6 +116,40 @@ export default {
         }
         return json({ error: "method not allowed" }, 405);
       }
+      if (path === "/capture") {
+        if (req.method === "POST") {
+          if (!isInbox) return json({ error: "unauthorised" }, 401);
+          const raw = await req.text().catch(() => "");
+          let body = null;
+          try { body = JSON.parse(raw); } catch (e) { body = { text: raw }; }
+          const list = (Array.isArray(body) ? body : [body]).map(normaliseCapture).filter(Boolean).slice(0, 20);
+          if (!list.length) return json({ error: "expected { text } with the alert text" }, 400);
+          const pending = await env.SP.list({ prefix: "cap:" });
+          if (pending.keys.length + list.length > MAX_CAPTURES) return json({ error: "capture inbox is full; open Budget Margin to collect them" }, 429);
+          for (const c of list) {
+            const key = `cap:${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            await env.SP.put(key, JSON.stringify(c), { expirationTtl: INBOX_TTL });
+          }
+          return json({ ok: true, stored: list.length });
+        }
+        if (!isApp) return json({ error: "unauthorised" }, 401);
+        if (req.method === "GET") {
+          const listed = await env.SP.list({ prefix: "cap:" });
+          const items = [];
+          for (const k of listed.keys) {
+            const v = await env.SP.get(k.name);
+            if (v) { try { items.push({ key: k.name, ...JSON.parse(v) }); } catch (e) { } }
+          }
+          return json({ items });
+        }
+        if (req.method === "DELETE") {
+          const body = await req.json().catch(() => ({}));
+          const keys = (body.keys || []).filter(k => typeof k === "string" && k.startsWith("cap:")).slice(0, 200);
+          for (const k of keys) await env.SP.delete(k);
+          return json({ ok: true, deleted: keys.length });
+        }
+        return json({ error: "method not allowed" }, 405);
+      }
       if (path === "/ai") {
         if (!isApp) return json({ error: "unauthorised" }, 401);
         if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
@@ -129,10 +170,20 @@ export default {
         if (used >= limit) return json({ error: `Daily AI limit reached (${limit}). Raise AI_DAILY_LIMIT in the Worker settings if you need more.` }, 429);
         await env.SP.put(ck, String(used + 1), { expirationTtl: 60 * 60 * 48 });
         const maxTokens = Math.min(4000, Math.max(200, body.maxTokens | 0 || 900));
-        const provider = image ? visionProvider(env) : textProvider(env);
-        const out = await callAI(env, provider, body.prompt, image, maxTokens);
-        if (out.error) return json({ error: out.error }, 502);
-        return json({ text: out.text, model: out.model, provider, used: used + 1, limit });
+        // try the preferred provider, retry once if it's busy, then fall back to any other configured one
+        const first = image ? visionProvider(env) : textProvider(env);
+        const order = [first, ...(image ? ["gemini", "openai", "groq"] : ["groq", "openai", "gemini"]).filter(p => p !== first && env[KEYS[p]])];
+        const errors = [];
+        for (const provider of order) {
+          for (let attempt = 0; attempt < 2; attempt++) {
+            const out = await callAI(env, provider, body.prompt, image, maxTokens);
+            if (!out.error) return json({ text: out.text, model: out.model, provider, used: used + 1, limit, fellBack: provider !== first || undefined });
+            errors.push(out.error);
+            if (!out.retry || attempt) break;
+            await new Promise(r => setTimeout(r, 1500));
+          }
+        }
+        return json({ error: errors.join(" · ") }, 502);
       }
       return json({ error: "not found" }, 404);
     } catch (e) {
@@ -168,7 +219,7 @@ async function callAI(env, provider, prompt, image, maxTokens) {
       body: JSON.stringify({ model, max_completion_tokens: maxTokens + 3000, temperature: 0.3, messages: [{ role: "user", content }] })
     });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) return { error: "Groq: " + ((d.error && d.error.message) || r.status) };
+    if (!r.ok) return { error: "Groq: " + ((d.error && d.error.message) || r.status), retry: r.status === 429 || r.status >= 500 };
     let text = d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content;
     if (text) text = text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
     return text ? { text, model: d.model || model } : { error: "Groq returned no text" };
@@ -183,7 +234,7 @@ async function callAI(env, provider, prompt, image, maxTokens) {
       body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: "user", content }] })
     });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) return { error: "OpenAI: " + ((d.error && d.error.message) || r.status) };
+    if (!r.ok) return { error: "OpenAI: " + ((d.error && d.error.message) || r.status), retry: r.status === 429 || r.status >= 500 };
     const text = d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content;
     return text ? { text, model: d.model || model } : { error: "OpenAI returned no text" };
   }
@@ -193,13 +244,16 @@ async function callAI(env, provider, prompt, image, maxTokens) {
   const r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: "POST",
     headers: { "x-goog-api-key": env.GEMINI_API_KEY, "Content-Type": "application/json" },
-    body: JSON.stringify({ contents: [{ role: "user", parts }], generationConfig: { maxOutputTokens: maxTokens } })
+    // Flash models "think" first and that counts against the output budget; leave room so the answer isn't cut off
+    body: JSON.stringify({ contents: [{ role: "user", parts }], generationConfig: { maxOutputTokens: maxTokens + 4000, temperature: 0.3 } })
   });
   const d = await r.json().catch(() => ({}));
-  if (!r.ok) return { error: "Gemini: " + ((d.error && d.error.message) || r.status) };
+  if (!r.ok) return { error: "Gemini: " + ((d.error && d.error.message) || r.status), retry: r.status === 429 || r.status >= 500 };
   const c = d.candidates && d.candidates[0];
   const text = c && c.content && (c.content.parts || []).map(p => p.text || "").join("");
-  return text ? { text, model } : { error: "Gemini returned no text" + (c && c.finishReason ? ` (${c.finishReason})` : "") };
+  if (text && text.trim()) return { text, model };
+  const why = (c && c.finishReason) || (d.promptFeedback && d.promptFeedback.blockReason) || "empty reply";
+  return { error: `Gemini returned no text (${why})`, retry: why === "MAX_TOKENS" || why === "empty reply" };
 }
 
 async function readState(env) {
@@ -261,4 +315,15 @@ export function normaliseReading(r) {
   const act = num(r.activeKcal);
   if (act != null && act >= 0 && act < 10000) out.activeKcal = Math.round(act);
   return out.weight != null || out.bodyFat != null || out.steps != null ? out : null;
+}
+
+/* A bank alert for Budget Margin: keep the text (trimmed and capped) plus optional app name and time. */
+export function normaliseCapture(c) {
+  if (typeof c === "string") c = { text: c };
+  if (!c || typeof c !== "object") return null;
+  const text = String(c.text ?? c.body ?? c.message ?? "").replace(/\r/g, "").trim().slice(0, MAX_CAPTURE_CHARS);
+  if (!text) return null;
+  const app = String(c.app ?? c.source ?? "").trim().slice(0, 40);
+  const t = new Date(c.ts ?? c.timestamp ?? Date.now());
+  return { text, app, ts: isNaN(t) ? new Date().toISOString() : t.toISOString(), received: new Date().toISOString() };
 }

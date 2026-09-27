@@ -124,4 +124,29 @@ await test("AI: Groq + Gemini together: text to Groq, photos to Gemini", async (
   await call(e, "POST", "/ai", { key: "app-secret-123", body: { prompt: "p", image: "data:image/jpeg;base64,/9j/AA" } });
   assert.ok(seen[2].includes("api.groq.com"));
 });
+await test("capture: inbox key can add a bank alert, only the app key can read and clear it", async () => {
+  const e = env();
+  let r = await call(e, "POST", "/capture", { key: "inbox-secret-456", body: { text: "DBS: SGD 12.50 spent at GRAB", app: "DBS" } });
+  assert.strictEqual(r.status, 200); assert.strictEqual(r.data.stored, 1);
+  r = await call(e, "GET", "/capture", { key: "inbox-secret-456" }); assert.strictEqual(r.status, 401);
+  r = await call(e, "GET", "/capture", { key: "app-secret-123" });
+  assert.strictEqual(r.data.items.length, 1); assert.strictEqual(r.data.items[0].text, "DBS: SGD 12.50 spent at GRAB"); assert.strictEqual(r.data.items[0].app, "DBS");
+  const k = r.data.items[0].key; assert.ok(k.startsWith("cap:"));
+  r = await call(e, "DELETE", "/capture", { key: "app-secret-123", body: { keys: [k, "state"] } }); assert.strictEqual(r.data.deleted, 1);
+  assert.ok(await e.SP.get("state") === null);
+  r = await call(e, "GET", "/capture", { key: "app-secret-123" }); assert.strictEqual(r.data.items.length, 0);
+});
+await test("capture: accepts plain text, rejects empty and wrong key", async () => {
+  const e = env();
+  const res = await worker.fetch(new Request("https://w.dev/capture", { method: "POST", headers: { Authorization: "Bearer inbox-secret-456", "Content-Type": "text/plain" }, body: "Your card was charged SGD 4.90 at OLD CHANG KEE" }), e);
+  assert.strictEqual(res.status, 200);
+  let r = await call(e, "POST", "/capture", { key: "inbox-secret-456", body: { text: "   " } }); assert.strictEqual(r.status, 400);
+  r = await call(e, "POST", "/capture", { key: "wrong", body: { text: "x" } }); assert.strictEqual(r.status, 401);
+  r = await call(e, "GET", "/capture", { key: "app-secret-123" }); assert.ok(r.data.items[0].text.includes("OLD CHANG KEE"));
+});
+await test("capture: health inbox and capture inbox don't mix", async () => {
+  const e = env();
+  await call(e, "POST", "/capture", { key: "inbox-secret-456", body: { text: "SGD 1.00 at X" } });
+  const r = await call(e, "GET", "/inbox", { key: "app-secret-123" }); assert.strictEqual(r.data.items.length, 0);
+});
 console.log(`\n${pass} passed`);
