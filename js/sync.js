@@ -32,7 +32,7 @@
     trainProfile: S => S.train ? S.train.profile : undefined,
     trainPlan: S => S.train ? S.train.plan : undefined,
     trainActive: S => S.train ? S.train.active : undefined,
-    game: S => S.game ? { start: S.game.start || null, eq: S.game.eq || {}, ach: S.game.ach || {} } : undefined
+    game: S => S.game ? { start: S.game.start || null, hero: S.game.hero || null, eq: S.game.eq || {}, ach: S.game.ach || {}, fights: S.game.fights || {} } : undefined
   };
   const TOMB_DAYS = 120;
 
@@ -56,7 +56,7 @@
     S.weights = {}; S.intake = {}; S.fasted = {}; S.custom = []; S.meals = []; S.health = {};
     S.program = Object.assign({}, S.program, { checkins: [] });
     S.train = Object.assign({ profile: null, plan: null, active: null }, S.train, { log: [] });
-    S.game = Object.assign({ start: null, eq: {}, ach: {} }, S.game, { items: [] });
+    S.game = Object.assign({ start: null, hero: null, eq: {}, ach: {}, fights: {} }, S.game, { items: [] });
     for (const k of Object.keys(r).sort()) {
       const v = r[k], i = k.indexOf("|"), t = k.slice(0, i), rest = k.slice(i + 1);
       if (t === "w") S.weights[rest] = v;

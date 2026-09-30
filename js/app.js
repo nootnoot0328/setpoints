@@ -73,6 +73,7 @@
     trash: '<path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/>',
     down: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
     up: '<path d="M12 16V5M7 10l5-5 5 5M5 20h14"/>',
+    gear: '<circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.6M12 18.6v2.6M21.2 12h-2.6M5.4 12H2.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8M18.5 18.5l-1.8-1.8M7.3 7.3L5.5 5.5"/>',
     quest: '<rect x="3.5" y="9.5" width="17" height="10.5" rx="1.5"/><path d="M3.5 13.5h17M5 9.5V8a4 4 0 014-4h6a4 4 0 014 4v1.5"/><rect x="10.5" y="11.8" width="3" height="3.6" rx=".8"/>'
   };
   const flame = (col) => `<svg viewBox="0 0 24 24" style="fill:${col || "currentColor"}"><path d="M13.6 2.2c.3 2.9-1.3 4.4-2.6 5.9-1.3 1.5-2.4 3-2.4 5.3 0 .9.2 1.7.6 2.4-1-.4-1.9-1.3-2.3-2.5-.6 1-.9 2.1-.9 3.3A6 6 0 0012 22.6a6 6 0 006-6.1c0-3.4-1.9-5.6-3.3-7.6-.9-1.3-1.3-2.9-1.1-6.7z"/></svg>`;
@@ -128,7 +129,7 @@
         estimator: "kalman", rho: "auto", backupDays: 7, voice: true, sound: true },
       weights: {}, intake: {}, fasted: {}, custom: [], meals: [], health: {}, meta: { u: {}, tomb: {} }, program: { checkins: [] },
       train: { profile: null, plan: null, log: [], active: null },
-      game: { start: null, eq: {}, ach: {}, items: [] }
+      game: { start: null, hero: null, eq: {}, ach: {}, fights: {}, items: [] }
     };
   }
   let S = blank();
@@ -313,7 +314,7 @@
     const top = STACK[STACK.length - 1];
     const onb = needsOnboarding() && !(top && top.v === "sync");
     document.body.classList.toggle("onb", onb);
-    const v = onb ? viewWelcome() : top ? SCREENS[top.v](top) : ({ dash: viewDash, log: viewLog, train: TR.viewTrain, quest: QS.view, strategy: viewStrategy, more: viewMore }[TAB])();
+    const v = onb ? viewWelcome() : top ? SCREENS[top.v](top) : ({ dash: viewDash, log: viewLog, train: TR.viewTrain, quest: QS.view }[TAB] || viewDash)();
     if (anim) v.classList.add("view");
     app.appendChild(v);
     const dock = !onb && !top && (TAB === "dash" || TAB === "log");
@@ -332,12 +333,10 @@
       onclick: () => (TAB === id && !STACK.length) ? window.scrollTo({ top: 0, behavior: "smooth" }) : go(id)
     }, h("span", { class: "ico", html: svg(I[icon]) }, badge ? h("span", { class: "badge" }, "!") : null), label);
     n.append(
-      item("dash", "Dashboard", "dash"),
+      item("dash", "Home", "dash", due),
       item("log", "Food Log", "log"),
       item("train", "Train", "train", !!(S.train && S.train.active)),
-      item("quest", "Quest", "quest", QS.pendingCount() > 0),
-      item("strategy", "Strategy", "strat", due),
-      item("more", "More", "more")
+      item("quest", "Quest", "quest", QS.pendingCount() > 0)
     );
   }
 
@@ -391,10 +390,13 @@
      ================================================================= */
   function viewDash() {
     const root = h("div");
-    root.append(head("Dashboard",
+    const due = E.checkinStatus(S).due && S.program.checkins.length + Object.keys(S.weights).length > 0;
+    const strat = iconBtn("strat", due ? "Strategy, check-in due" : "Strategy", () => push({ v: "strategy" }));
+    if (due) strat.append(h("span", { class: "badge" }, "!"));
+    root.append(head("Home",
       iconBtn(isDark() ? "sun" : "moon", "Switch theme", () => {
         S.settings.theme = isDark() ? "light" : "dark"; save(); applyTheme(); render(false);
-      })));
+      }), strat, iconBtn("gear", "Settings and more", () => push({ v: "more" }))));
 
     if (updateReady()) root.append(h("div", { class: "banner" },
       h("span", null, `Setpoint ${UPD.latest} is available. You're on ${UPD.current}.`),
@@ -454,7 +456,7 @@
         () => push({ v: "detail", kind: "balance" })),
       tile("Goal Progress", gp ? `Since ${dShort(S.goal.startDate || firstDataDate())}` : "No goal weight",
         h("div", { class: "meter" }, h("i", { style: { width: `${(gp ? gp.pct : 0) * 100}%` } })),
-        gp ? num(gp.pct * 100) : "—", "%", () => go("strategy"))
+        gp ? num(gp.pct * 100) : "—", "%", () => push({ v: "strategy" }))
     ));
 
     // body metrics
@@ -1477,7 +1479,14 @@
   }
 
   const SCREENS = { report: (...a) => viewReport(...a), coach: (...a) => viewCoach(...a), detail: viewDetail, body: viewBody, calendar: viewCalendar, profile: viewProfile, program: viewProgram, foods: viewFoods, data: viewData, method: viewMethod,
-    sync: (...a) => viewSync(...a), shortcut: (...a) => viewShortcut(...a) };
+    sync: (...a) => viewSync(...a), shortcut: (...a) => viewShortcut(...a),
+    strategy: () => asSub(viewStrategy()), more: () => asSub(viewMore()) };
+  // Strategy and More used to be tabs; now they open from Home's header with a back button
+  function asSub(v) {
+    const hd = v.querySelector(".head");
+    if (hd) { hd.classList.add("sub"); hd.prepend(h("button", { class: "back", "aria-label": "Back", html: svg(I.back), onclick: back })); if (hd.children.length < 3) hd.append(h("div", { style: { width: "40px" } })); }
+    return v;
+  }
   // training screens are added at boot, once the module is initialised
 
   /* =================================================================
@@ -2440,6 +2449,7 @@
     };
     TR = window.SPTrain(X);
     QS = window.SPQuest(X);
+    Object.assign(SCREENS, QS.screens);
     Object.assign(SCREENS, TR.screens);
     if (!load()) { S = blank(); S.settings.onboarding = true; save(); }
     if (!S.game.start) { S.game.start = today(); save(); }   // Quest counts from here (plus a week back)
@@ -2450,7 +2460,7 @@
     if (location.hash === "#log") TAB = "log";
     else if (location.hash === "#train") TAB = "train";
     else if (location.hash === "#quest") TAB = "quest";
-    else if (location.hash === "#strategy") TAB = "strategy";
+    else if (location.hash === "#strategy") STACK = [{ v: "strategy" }];
     render(true);
     let rw = window.innerWidth, rt;
     window.addEventListener("resize", () => { if (Math.abs(window.innerWidth - rw) < 24) return; rw = window.innerWidth; clearTimeout(rt); rt = setTimeout(() => render(false), 160); });
@@ -2460,7 +2470,7 @@
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { }
     if (SC.enabled) setTimeout(() => runSync("open"), 600);
     if (SC.url) setTimeout(refreshAi, 1500);
-    currentVersion().then(v => { UPD.current = v; if (TAB === "more") render(false); });
+    currentVersion().then(v => { UPD.current = v; if ((STACK[STACK.length - 1] || {}).v === "more") render(false); });
     setTimeout(() => checkUpdate(false), 2500);
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && Date.now() - UPD.checked > 6 * 36e5) checkUpdate(false); });
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") runSync("focus"); });

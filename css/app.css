@@ -175,8 +175,8 @@ nav.nav{
   position:fixed;left:0;right:0;bottom:0;z-index:41;background:var(--bg);
   border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);
 }
-.nav-inner{max-width:520px;margin:0 auto;display:grid;grid-template-columns:repeat(6,1fr);height:var(--nav-h);align-items:center}
-.nav button{display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--muted);font-size:12px;padding-top:4px;transition:color .2s;min-width:0;white-space:nowrap}
+.nav-inner{max-width:520px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);height:var(--nav-h);align-items:center}
+.nav button{display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--muted);font-size:14px;padding-top:4px;transition:color .2s;min-width:0;white-space:nowrap}
 .nav button[aria-current="page"]{color:var(--text)}
 .nav button svg{width:27px;height:27px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .nav button[aria-current="page"] svg{fill:currentColor;fill-opacity:.12}
@@ -828,3 +828,84 @@ body.onb #app{padding-bottom:40px}
   .q-tw{opacity:1}
 }
 .q-seg button{font-size:14px;padding-left:4px;padding-right:4px;white-space:nowrap}
+.head .icon-btn{position:relative}
+.head .icon-btn .badge{top:-3px;right:-3px}
+/* Quest v2 — cultivation */
+.q-name{margin-top:12px;font-family:var(--display);font-stretch:125%;font-size:20px;letter-spacing:-.01em}
+.q-hero .q-lv{margin-top:4px}
+.q-stats{display:flex;gap:10px;margin-top:14px;width:100%}
+.q-stats > div{flex:1;background:var(--card2);border-radius:12px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:1px}
+.q-stats b{font-size:18px}
+.q-stats span:last-child{font-size:12px;color:var(--muted);letter-spacing:.05em}
+.q-stats .q-ico{color:var(--muted)}
+.q-bosshead{display:flex;gap:14px;align-items:center;margin-bottom:10px}
+.q-bosspic{width:84px;height:84px;flex:none;background:var(--card2);border-radius:14px;overflow:hidden}
+.q-bosspic svg,.q-fighter svg,.q-slotic svg{width:100%;height:100%;display:block}
+.q-bosspic.dead,.q-fighter.dead{filter:grayscale(1);opacity:.45}
+.q-bossinfo{display:flex;flex-direction:column;min-width:0}
+.q-bossinfo > span{font-size:13px;color:var(--muted)}
+.q-bossinfo b{font-size:22px;line-height:1.2}
+.q-bossinfo em{font-style:normal;color:var(--muted);font-size:14.5px}
+.q-bossinfo .q-streak{margin-top:6px}
+.q-hplbl{font-size:12.5px;color:var(--muted);margin:8px 0 3px}
+.q-hp{position:relative;height:18px;background:var(--card2);border-radius:6px;overflow:hidden}
+.q-hp i{position:absolute;inset:0 auto 0 0;background:var(--carb);transition:width .35s ease}
+.q-hp.boss i{background:var(--bad)}
+.q-hp span{position:relative;display:block;text-align:center;font-size:12px;line-height:18px;font-weight:600;color:var(--text)}
+.q-boss.won{box-shadow:inset 0 0 0 2px var(--carb)}
+.q-gear{padding-top:6px;padding-bottom:6px}
+.q-slot{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:10px 0;border-bottom:1px solid var(--line)}
+.q-slot:last-child{border-bottom:0}
+.q-slotic{width:52px;height:52px;flex:none;border-radius:12px;background:var(--card2);box-shadow:inset 0 0 0 2px var(--rc);overflow:hidden}
+.q-slott{flex:1;display:flex;flex-direction:column;min-width:0}
+.q-slott span{font-size:12.5px;color:var(--muted)}
+.q-slott b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.q-slott em{font-style:normal;font-size:13px;color:var(--muted);line-height:1.3}
+.q-chev svg{width:18px;height:18px;stroke:var(--faint);fill:none;stroke-width:2}
+.q-sheeth{margin:6px 0 12px;font-size:20px}
+.q-statl{font-weight:600;margin-top:4px}
+.q-skill{margin:8px auto 0;max-width:320px;background:var(--card2);border-radius:12px;padding:8px 12px;font-size:14.5px}
+.q-skill b{color:var(--rc)}
+.q-setup h3{margin:16px 0 8px;font-size:15px;color:var(--muted);font-weight:600}
+.q-setup h3:first-child{margin-top:0}
+.q-chips{display:flex;flex-wrap:wrap;gap:8px}
+.q-chips .chip{height:40px;font-size:15px;padding:0 14px}
+.q-chips .q-sw{width:40px;padding:0;background:var(--sw);box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
+.q-chips .q-sw.on{box-shadow:0 0 0 3px var(--bg),0 0 0 5px var(--text)}
+.q-arena{padding:14px}
+.q-arenarow{position:relative;display:flex;justify-content:space-between;align-items:flex-end;gap:8px;background:linear-gradient(var(--card2),var(--card));border-radius:14px;padding:10px 6px 0}
+.q-fighter{width:46%;aspect-ratio:1}
+.q-fighter.lunge{animation:q-lunge .4s ease}
+.q-fighter.lunge-l{animation:q-lunge-l .4s ease}
+.q-fighter.hurt{animation:q-hurt .45s ease}
+@keyframes q-lunge{50%{transform:translateX(18%)}}
+@keyframes q-lunge-l{50%{transform:translateX(-18%)}}
+@keyframes q-hurt{0%,100%{filter:none;transform:none}30%{filter:brightness(1.8) saturate(0);transform:translateX(4px)}60%{transform:translateX(-4px)}}
+.q-popwrap{position:absolute;inset:0;pointer-events:none}
+.q-float{position:absolute;top:30%;right:22%;font-weight:800;font-size:20px;animation:q-float 1.1s ease-out forwards;text-shadow:0 1px 0 var(--card)}
+.q-float.dmg{color:var(--bad)}
+.q-float.hit{left:22%;right:auto;color:var(--bad)}
+.q-float.heal{left:22%;right:auto;color:var(--carb)}
+.q-float.bheal{color:var(--carb)}
+@keyframes q-float{from{transform:translateY(0);opacity:1}to{transform:translateY(-40px);opacity:0}}
+.q-arenabars{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px}
+.q-arenabars .q-hplbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.q-days{padding-top:4px;padding-bottom:4px}
+.q-day{padding:10px 0;border-bottom:1px solid var(--line)}
+.q-day:last-child{border-bottom:0}
+.q-dayh{font-weight:600;font-size:14.5px;display:flex;gap:8px;align-items:baseline}
+.q-dayh em{font-style:normal;color:var(--carb);font-size:13px}
+.q-dl{display:flex;align-items:center;gap:8px;font-size:14px;margin-top:6px}
+.q-dl span:nth-child(2){flex:1;color:var(--muted)}
+.q-dl b{font-weight:700}
+.q-dl .q-ico{color:var(--muted)}
+.q-dl.heal b,.q-dl.heal .q-ico{color:var(--carb)}
+.q-dl.bad b,.q-dl.bad .q-ico{color:var(--bad)}
+.q-dl.quiet span{color:var(--faint)}
+@media (prefers-reduced-motion: reduce){.q-fighter.lunge,.q-fighter.lunge-l,.q-fighter.hurt,.q-float{animation:none}}
+.q-hero .q-lv{flex-direction:column;align-items:center;gap:0}
+.q-feats{grid-template-columns:repeat(4,minmax(0,1fr))}
+.q-feat{min-height:0;padding:10px 4px}
+.q-feat:not(.on){aspect-ratio:1;padding:0}
+.q-feat:not(.on) b{display:none}
+.q-feat.on{grid-column:span 2}
