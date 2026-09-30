@@ -8,6 +8,7 @@
   const E = window.Engine, C = window.Charts, FOODS = window.SP_FOODS, Y = window.SPSync;
   const { r0, r1, clamp, addDays, daysBetween, isWeekend, weekStart, today } = E;
   let TR = null;   // training module, initialised in boot()
+  let QS = null;   // quest module, initialised in boot()
 
   /* =================================================================
      helpers
@@ -71,7 +72,8 @@
     moonfast: '<circle cx="12" cy="12" r="8.5" stroke-dasharray="3 3"/>',
     trash: '<path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/>',
     down: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
-    up: '<path d="M12 16V5M7 10l5-5 5 5M5 20h14"/>'
+    up: '<path d="M12 16V5M7 10l5-5 5 5M5 20h14"/>',
+    quest: '<rect x="3.5" y="9.5" width="17" height="10.5" rx="1.5"/><path d="M3.5 13.5h17M5 9.5V8a4 4 0 014-4h6a4 4 0 014 4v1.5"/><rect x="10.5" y="11.8" width="3" height="3.6" rx=".8"/>'
   };
   const flame = (col) => `<svg viewBox="0 0 24 24" style="fill:${col || "currentColor"}"><path d="M13.6 2.2c.3 2.9-1.3 4.4-2.6 5.9-1.3 1.5-2.4 3-2.4 5.3 0 .9.2 1.7.6 2.4-1-.4-1.9-1.3-2.3-2.5-.6 1-.9 2.1-.9 3.3A6 6 0 0012 22.6a6 6 0 006-6.1c0-3.4-1.9-5.6-3.3-7.6-.9-1.3-1.3-2.9-1.1-6.7z"/></svg>`;
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -125,7 +127,8 @@
       settings: { kcalPerKg: 7700, alpha: 0.25, theme: "system", dash: "remaining", demo: false, lastExport: null,
         estimator: "kalman", rho: "auto", backupDays: 7, voice: true, sound: true },
       weights: {}, intake: {}, fasted: {}, custom: [], meals: [], health: {}, meta: { u: {}, tomb: {} }, program: { checkins: [] },
-      train: { profile: null, plan: null, log: [], active: null }
+      train: { profile: null, plan: null, log: [], active: null },
+      game: { start: null, eq: {}, ach: {}, items: [] }
     };
   }
   let S = blank();
@@ -148,7 +151,8 @@
       settings: Object.assign(b.settings, p.settings), fasted: p.fasted || {}, custom: p.custom || [], meals: p.meals || [],
       health: p.health || {}, meta: p.meta && p.meta.u ? p.meta : { u: {}, tomb: {} },
       program: p.program && p.program.checkins ? p.program : { checkins: [] },
-      train: Object.assign(b.train, p.train || {})
+      train: Object.assign(b.train, p.train || {}),
+      game: Object.assign(b.game, p.game || {})
     });
   }
   function migrateV1(p) {
@@ -238,6 +242,7 @@
       { n: "Kaya toast set, 2 eggs", kcal: 430, p: 15, f: 22, c: 42, unit: "set", g: 260, qty: 1 },
       { n: "Kopi siew dai", kcal: 90, p: 2, f: 3, c: 14, unit: "cup", g: 200, qty: 1 }] }];
     TR.seed(rnd);
+    S.game.start = addDays(today(), -14);
     S.settings.demo = true;
     save();
   }
@@ -308,7 +313,7 @@
     const top = STACK[STACK.length - 1];
     const onb = needsOnboarding() && !(top && top.v === "sync");
     document.body.classList.toggle("onb", onb);
-    const v = onb ? viewWelcome() : top ? SCREENS[top.v](top) : ({ dash: viewDash, log: viewLog, train: TR.viewTrain, strategy: viewStrategy, more: viewMore }[TAB])();
+    const v = onb ? viewWelcome() : top ? SCREENS[top.v](top) : ({ dash: viewDash, log: viewLog, train: TR.viewTrain, quest: QS.view, strategy: viewStrategy, more: viewMore }[TAB])();
     if (anim) v.classList.add("view");
     app.appendChild(v);
     const dock = !onb && !top && (TAB === "dash" || TAB === "log");
@@ -330,6 +335,7 @@
       item("dash", "Dashboard", "dash"),
       item("log", "Food Log", "log"),
       item("train", "Train", "train", !!(S.train && S.train.active)),
+      item("quest", "Quest", "quest", QS.pendingCount() > 0),
       item("strategy", "Strategy", "strat", due),
       item("more", "More", "more")
     );
@@ -2430,17 +2436,20 @@
     const X = {
       h, svg, I, $, E, C, S: () => S, save, render, push, back, go, top: () => (STACK[STACK.length - 1] || {}).v,
       openSheet, closeSheet, openMenu, confirmSheet, toast, seg, head, subhead, iconBtn, section, kv, flags, field, numIn, selIn,
-      tile, num, countUps, CW, uid, dShort, dLong, DOW, DOW1, f0, f1
+      tile, num, countUps, CW, uid, dShort, dLong, DOW, DOW1, f0, f1, aiCall, aiReady
     };
     TR = window.SPTrain(X);
+    QS = window.SPQuest(X);
     Object.assign(SCREENS, TR.screens);
     if (!load()) { S = blank(); S.settings.onboarding = true; save(); }
+    if (!S.game.start) { S.game.start = today(); save(); }   // Quest counts from here (plus a week back)
     applyTheme();
     $("#dockSearch").addEventListener("click", e => { if (!e.target.closest(".scan")) logSheet({}); });
     $("#dockScan").addEventListener("click", e => { e.stopPropagation(); logSheet({ tab: "scan" }); });
     $("#dockPlus").addEventListener("click", () => fabMenu());
     if (location.hash === "#log") TAB = "log";
     else if (location.hash === "#train") TAB = "train";
+    else if (location.hash === "#quest") TAB = "quest";
     else if (location.hash === "#strategy") TAB = "strategy";
     render(true);
     let rw = window.innerWidth, rt;

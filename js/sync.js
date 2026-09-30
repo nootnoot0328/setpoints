@@ -7,7 +7,8 @@
        w|date  weigh-in          i|date|id  food entry     x|date  fasting day
        c|id    custom food       m|id       saved meal     k|date  check-in
        t|id    training session  h|date     Apple Health daily (steps)
-       s|name  whole sections (profile, goal, settings, training plan …)
+       g|id    Quest item            s|name  whole sections (profile, goal,
+                                     settings, training plan, quest …)
    - Every save compares records with the last saved copy. A changed record
      gets meta.u[key] = now; a vanished one gets meta.tomb[key] = now.
    - Merging two devices keeps, per record, whichever copy changed last,
@@ -30,7 +31,8 @@
     settings: S => { const o = {}; SYNC_SETTINGS.forEach(k => { if (S.settings && S.settings[k] !== undefined) o[k] = S.settings[k]; }); return o; },
     trainProfile: S => S.train ? S.train.profile : undefined,
     trainPlan: S => S.train ? S.train.plan : undefined,
-    trainActive: S => S.train ? S.train.active : undefined
+    trainActive: S => S.train ? S.train.active : undefined,
+    game: S => S.game ? { start: S.game.start || null, eq: S.game.eq || {}, ach: S.game.ach || {} } : undefined
   };
   const TOMB_DAYS = 120;
 
@@ -45,6 +47,7 @@
     for (const c of (S.program && S.program.checkins) || []) r["k|" + c.date] = c;
     for (const t of (S.train && S.train.log) || []) if (t && t.id) r["t|" + t.id] = t;
     for (const d in S.health || {}) r["h|" + d] = S.health[d];
+    for (const it of (S.game && S.game.items) || []) if (it && it.id) r["g|" + it.id] = it;
     for (const k in SECTIONS) { const v = SECTIONS[k](S); if (v !== undefined) r["s|" + k] = v; }
     return r;
   }
@@ -53,6 +56,7 @@
     S.weights = {}; S.intake = {}; S.fasted = {}; S.custom = []; S.meals = []; S.health = {};
     S.program = Object.assign({}, S.program, { checkins: [] });
     S.train = Object.assign({ profile: null, plan: null, active: null }, S.train, { log: [] });
+    S.game = Object.assign({ start: null, eq: {}, ach: {} }, S.game, { items: [] });
     for (const k of Object.keys(r).sort()) {
       const v = r[k], i = k.indexOf("|"), t = k.slice(0, i), rest = k.slice(i + 1);
       if (t === "w") S.weights[rest] = v;
@@ -63,6 +67,7 @@
       else if (t === "k") S.program.checkins.push(v);
       else if (t === "t") S.train.log.push(v);
       else if (t === "h") S.health[rest] = v;
+      else if (t === "g") S.game.items.push(v);
       else if (t === "s") {
         if (rest === "profile") S.profile = v;
         else if (rest === "goal") S.goal = v;
@@ -70,11 +75,13 @@
         else if (rest === "trainProfile") S.train.profile = v;
         else if (rest === "trainPlan") S.train.plan = v;
         else if (rest === "trainActive") S.train.active = v;
+        else if (rest === "game") Object.assign(S.game, v);
       }
     }
     for (const d in S.intake) S.intake[d].sort((a, b) => String(a.t).localeCompare(String(b.t)) || String(a.id).localeCompare(String(b.id)));
     S.program.checkins.sort((a, b) => a.date.localeCompare(b.date));
     S.train.log.sort((a, b) => a.date.localeCompare(b.date) || String(a.id).localeCompare(String(b.id)));
+    S.game.items.sort((a, b) => (a.at || 0) - (b.at || 0) || String(a.id).localeCompare(String(b.id)));
     return S;
   }
 

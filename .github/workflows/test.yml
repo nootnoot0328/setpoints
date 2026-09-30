@@ -15,4 +15,4 @@ jobs:
       - name: Syntax check
         run: for f in js/*.js sw.js; do node --check "$f"; done && node --check worker/worker.js
       - name: Engine tests
-        run: node test/engine.test.js && node test/sync.test.js && node test/worker.test.mjs
+        run: node test/engine.test.js && node test/sync.test.js && node test/quest.test.js && node test/worker.test.mjs
