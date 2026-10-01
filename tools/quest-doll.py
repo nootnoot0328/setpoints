@@ -260,11 +260,12 @@ HAIR_COLORS = {                       # dark, mid, light
     # icy blue at the roots fading to lavender at the tips (two ramps, blended down the hair)
     "frost": (((92, 120, 176), (178, 212, 240), (238, 248, 255)), ((118, 92, 176), (196, 164, 232), (242, 226, 255))),
 }
-def recolour(px, ramp, fade=None):
+def recolour(px, ramp, fade=None, ys=None):
     rgb = px[:, :3].astype(float); lum = rgb @ [0.3, 0.59, 0.11]
     mx = rgb.max(1); mn = rgb.min(1); sat = (mx - mn) / np.maximum(mx, 1)
     hue = np.degrees(np.arctan2(np.sqrt(3) * (rgb[:, 1] - rgb[:, 2]), 2 * rgb[:, 0] - rgb[:, 1] - rgb[:, 2])) % 360
     skin = (rgb[:, 0] > 205) & (rgb[:, 1] > 160) & (rgb[:, 0] - rgb[:, 2] < 90)
+    if ys is not None: skin &= ys >= 290          # skin starts at the eyes; pale bands above are hair shine
     ribbon = (rgb[:, 0] > 140) & (rgb[:, 1] < 80) & (sat > 0.55)
     is_hair = (lum > 30) & ((hue < 60) | (hue > 330)) & (sat > 0.15) & ~skin & ~ribbon   # leaves outlines, ribbons, skin
     lo, hi = np.percentile(lum[is_hair], [3, 97]); t = np.clip((lum - lo) / (hi - lo), 0, 1)
@@ -275,7 +276,7 @@ def recolour(px, ramp, fade=None):
     else: col = ramp_col(ramp[0]) * (1 - fade[:, None]) + ramp_col(ramp[1]) * fade[:, None]
     out = px.copy(); out[is_hair, :3] = np.clip(col[is_hair], 0, 255).astype(np.uint8)
     return out
-for s in ["short", "spiky", "long", "twin"]:
+for s in ["short", "spiky", "long", "twin", "moon"]:
     a = load("hero-hair-" + s, HAIR_SHIFT.get(s, 0))
     m = diff(a, bald)
     m = nd.binary_opening(m, structure=np.ones((3, 3)))
@@ -291,8 +292,8 @@ for s in ["short", "spiky", "long", "twin"]:
         if ramp and c == "frost":
             ys = np.nonzero(m)[0]; y0, y1 = ys.min(), ys.max()
             fade = np.clip(((ys - y0) / max(1, y1 - y0) - 0.35) / 0.6, 0, 1)   # tips, not roots, go lavender
-            hh[m] = recolour(hair[m], ramp, fade)
-        elif ramp: hh[m] = recolour(hair[m], ramp)
+            hh[m] = recolour(hair[m], ramp, fade, ys)
+        elif ramp: hh[m] = recolour(hair[m], ramp, ys=np.nonzero(m)[0])
         layers[f"hair-{s}-{c}"] = hh
 
 # ---------- one crop box for every layer so they stack exactly
@@ -346,4 +347,4 @@ for i, hs in enumerate(["short-brown", "spiky-black", "long-ash", "twin-blonde"]
         names = ["cape", "body", "boots", "wpn-sword", "hand", "face", "blink-face", "hair-" + hs] + ([f"helm-{hn}"] if hn else [])
         P.alpha_composite(stack_m(names, f"hairmask-{hn}" if hn in HELM_CUT else None), (j * tw, i * th))
 P.save(f"{OUT}/prev-helmhair.png")
-grid([[["cape", "body", "boots", "wpn-sword", "hand", "face", f"hair-{s}-{c}"] for c in HAIR_COLORS] for s in ["short", "spiky", "long", "twin"]], f"{OUT}/prev-hair.png")
+grid([[["cape", "body", "boots", "wpn-sword", "hand", "face", f"hair-{s}-{c}"] for c in HAIR_COLORS] for s in ["short", "spiky", "long", "twin", "moon"]], f"{OUT}/prev-hair.png")

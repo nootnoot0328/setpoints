@@ -50,7 +50,7 @@ Edit the first attached character. Keep everything identical: same pose, same fr
 Edit the first attached character. Keep everything identical: same pose, same framing, same position and size in the image, same face, same clothes, same sword. Remove the helmet and give the character the hairstyle from the second attached picture: long straight hair to the waist with blunt straight-cut bangs, a small bun on one side, and a crescent-moon flower hair clip on the bun. Hair colour: medium brown (the app recolours it). Keep the hair clip its own colours. Match the first picture's pixel-art style, not the second's. Transparent background.
 ```
 
-Save as `hero-hair-moon.png`. In the app, pick the **Frost** colour to get the icy blue fading to lavender from your reference.
+Save as `hero-hair-moon.png`. **Done.** In the app, pick the **Frost** colour to get the icy blue fading to lavender from your reference.
 
 **The face from your reference (1).** Attach **`hero-bald.png`** and your reference picture:
 

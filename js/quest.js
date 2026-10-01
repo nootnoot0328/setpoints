@@ -140,8 +140,8 @@
   const levelOf = earned => Math.floor(Math.sqrt(Math.max(0, earned) / 40)) + 1;
   function rankOf(lv) { const i = Math.min(RANKS.length - 1, Math.floor((lv - 1) / 5)); return { i, en: RANKS[i], tier: lv - i * 5 }; }
   /* Cosmetic look: hairstyle and colour show when the helmet is hidden. Stats never change. */
-  const HAIRS = ["short", "spiky", "long", "twin"];
-  const HAIR_NAME = { short: "Short", spiky: "Spiky", long: "Long", twin: "Twin tails" };
+  const HAIRS = ["short", "spiky", "long", "twin", "moon"];
+  const HAIR_NAME = { short: "Short", spiky: "Spiky", long: "Long", twin: "Twin tails", moon: "Moon bun" };
   const HAIR_COLORS = { brown: "#8a5a3a", black: "#34313f", blonde: "#deac4e", ash: "#d6cec8", auburn: "#aa3c28", teal: "#2c8e92", frost: "linear-gradient(160deg,#cfe6fa 35%,#c4a6ea)" };
   function lookOf(l) {
     l = l || {};
