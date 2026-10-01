@@ -103,7 +103,7 @@ Check: the handle is at the bottom-left on every tile, the blade or head points 
 
 One image holding all four sheets is fine; Claude slices it.
 
-**Uncommon redo (1 image, `eq-weapon-uncommon.png`).** The first batch's Uncommon tiers came back as near-copies of the Common weapons. Attach **`eq-weapon.png`**:
+**Uncommon redo (1 image, `eq-weapon-uncommon.png`). Done.** The first batch's Uncommon tiers came back as near-copies of the Common weapons; this prompt fixed it. Reuse it for any slot whose Uncommon row repeats this problem. Attach **`eq-weapon.png`**:
 
 ```
 2x2 sheet of equipment icons, transparent background, same style, angle and size as the attached sheet, handle at the bottom-left, tip at the top-right.

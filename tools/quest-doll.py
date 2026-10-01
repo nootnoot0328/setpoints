@@ -227,14 +227,18 @@ def ends(img):
     ys, xs = np.nonzero(big); proj = xs - ys
     return np.array([xs[proj.argmin()], ys[proj.argmin()]], float), np.array([xs[proj.argmax()], ys[proj.argmax()]], float)
 for n in WEAP:
-    files = sorted(glob.glob(f"{SP}/art/tiers/w-{n}-r*.png"))
+    files = sorted(glob.glob(f"{SP}/art/tiers/w-{n}-r[0-9].png"))
     if not files: continue
     crops = {int(f.rsplit("-r", 1)[1][0]): strip_fringe(np.array(Image.open(f).convert("RGBA"))) for f in files}
-    ref = crops.get(1, next(iter(crops.values()))); t0, p0 = ends(ref); ref_len = np.hypot(*(p0 - t0))
+    # size reference: the Common-sized weapon on the Rare..Legendary sheet (w-<shape>-ref.png,
+    # the first batch's rejected Uncommon). Uncommon itself is always Common length.
+    rf = f"{SP}/art/tiers/w-{n}-ref.png"
+    ref = np.array(Image.open(rf).convert("RGBA")) if os.path.exists(rf) else crops.get(1, next(iter(crops.values())))
+    t0, p0 = ends(ref); ref_len = np.hypot(*(p0 - t0))
     for r, c in crops.items():
         ICONS[f"w-{n}-r{r}"] = c
         g, L, deg = WEAP[n]
-        tl, tp = ends(c); scale = min(1.3, max(0.85, np.hypot(*(tp - tl)) / ref_len))
+        tl, tp = ends(c); scale = 1.0 if r == 1 else min(1.3, max(0.85, np.hypot(*(tp - tl)) / ref_len))
         gp = tl + (tp - tl) * g
         d = np.array([math.cos(math.radians(deg)), math.sin(math.radians(deg))])
         full = np.zeros((N, N, 4), np.uint8); hh, ww = c.shape[:2]

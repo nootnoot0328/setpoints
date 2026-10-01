@@ -451,7 +451,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
      TIERED lists the drawings that have shipped; anything else uses the Common
      drawing until its art lands. Entries look like "weapon:sword:4". */
   const TIERED = new Set([
-    ...["sword", "axe", "bow", "staff"].flatMap(w => [2, 3, 4].map(r => `weapon:${w}:${r}`))   // Uncommon weapons: redo pending
+    ...["sword", "axe", "bow", "staff"].flatMap(w => [1, 2, 3, 4].map(r => `weapon:${w}:${r}`))
   ]);
   function artKey(slot, it) {
     const shape = SHAPES[slot][it.shape];
