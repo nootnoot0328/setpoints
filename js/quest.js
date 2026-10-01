@@ -446,18 +446,30 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
     return Object.assign({}, it, { v: 3, slot, r, shape: Math.floor(rnd() * 4), name, stat: SLOT_STAT[slot](r),
       skill: it.skill && SKILLS[it.skill.k] ? it.skill : makeSkill(rnd, r) });
   }
-  const iconOf = it => art(ICON_PRE[it.slot] + SHAPES[it.slot][it.shape]);
-  /* Paper-doll layers, back to front, as {k, src}. k "w" is the weapon (poses rotate it).
+  /* Rarity is shown by the item's own design, never by tinting. Each shape has a
+     separate drawing per tier (Uncommon..Legendary: art key "<shape>-r<tier>").
+     TIERED lists the drawings that have shipped; anything else uses the Common
+     drawing until its art lands. Entries look like "weapon:sword:4". */
+  const TIERED = new Set([]);
+  function artKey(slot, it) {
+    const shape = SHAPES[slot][it.shape];
+    return it.r > 0 && TIERED.has(`${slot}:${shape}:${it.r}`) ? `${shape}-r${it.r}` : shape;
+  }
+  const iconOf = it => art(ICON_PRE[it.slot] + artKey(it.slot, it));
+  /* Paper-doll layers, back to front, as {k, src}. k "w" is the weapon (poses rotate it),
+     "ft" the boots (stay planted while the rest breathes), "bl" the blink.
      Empty armour/boots show the starting tunic and boots. */
   function heroLayers(eq, look) {
     eq = eq || {}; look = lookOf(look);
-    const sh = s => eq[s] ? SHAPES[s][eq[s].shape] : null;
-    const w = sh("weapon") || "sword", hd = sh("helm") || "kettle", ar = sh("armor"), bt = sh("boots");
-    const L = [["b", "hero-body" + (ar ? "-" + ar : "")], ["ft", "hero-boots" + (bt ? "-" + bt : "")]];
-    if (ar === "robe") L.push(["hem", "hero-hem-robe"]);
+    const key = s => eq[s] ? artKey(s, eq[s]) : null;
+    const w = key("weapon") || "sword", hd = key("helm") || "kettle", ar = key("armor"), bt = key("boots");
+    const robe = !!eq.armor && SHAPES.armor[eq.armor.shape] === "robe";
+    const L = robe ? [] : [["cape", "hero-cape"]];   // robes have no cape
+    L.push(["b", "hero-body" + (ar ? "-" + ar : "")], ["ft", "hero-boots" + (bt ? "-" + bt : "")]);
+    if (robe) L.push(["hem", "hero-hem-" + ar]);
     L.push(["w", "hero-wpn-" + w], ["hn", "hero-hand"]);
-    if (look.helm) L.push(["hd", "hero-head-" + hd], ["tl", "hero-tail"]);
-    else L.push(["hd", "hero-face"], ["hr", `hero-hair-${look.hair}-${look.hc}`]);
+    if (look.helm) L.push(["hd", "hero-head-" + hd], ["bl", "hero-blink-" + hd], ["tl", "hero-tail"]);
+    else L.push(["hd", "hero-face"], ["bl", "hero-blink-face"], ["hr", `hero-hair-${look.hair}-${look.hc}`]);
     return L.map(([k, f]) => ({ k, src: art(f) }));
   }
 
@@ -510,7 +522,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
 
   const Core = { RAR, RCOL, ODDS, PITY_RARE, PITY_LEG, CHEST_COST, RALLY, SLOTS, SLOT_NAME, SHAPES, NOUN, SKILLS, CLASSES, RANKS, MOBS, FLYING, MOB_SCALE, STARTER, THEME, STOPS_XY,
     art, doneSets, stepGoal, stepsOn, dayStatus, mobsForWeek, weekStops, levelOf, rankOf, statsAt, gearOf, equipped, heroOf, baseEvents, battle, bossFor, summary,
-    pityOf, rollRarity, localItem, aiPrompt, parseItem, migrateItem, iconOf, heroLayers, HAIRS, HAIR_NAME, HAIR_COLORS, lookOf, buildRoute, achText, ACH_COUNT: ACH.length, chestSVG, hashF, seeded };
+    pityOf, rollRarity, localItem, aiPrompt, parseItem, migrateItem, iconOf, heroLayers, TIERED, artKey, HAIRS, HAIR_NAME, HAIR_COLORS, lookOf, buildRoute, achText, ACH_COUNT: ACH.length, chestSVG, hashF, seeded };
   if (typeof module === "object" && module.exports) { module.exports = Core; return; }
   root.SPQuestCore = Core;
 
@@ -575,11 +587,17 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
     // Weapon angles for poses, measured from how each weapon sits in the hand
     const POSE_ANGLE = { sword: { up: 72, rest: -63 }, axe: { up: -22, rest: 0 }, bow: { up: 125, rest: 0 }, staff: { up: -11, rest: 0 } };
     function doll(eq, cls, look) {
-      const glow = eq && eq.weapon && eq.weapon.r >= 3 ? C.RCOL[eq.weapon.r] : null;
       const wk = eq && eq.weapon ? C.SHAPES.weapon[eq.weapon.shape] : "sword", a = POSE_ANGLE[wk];
+      // consecutive layers that breathe share one wrapper; the boots sit in a still one
+      const groups = [];
+      C.heroLayers(eq, look || C.heroOf(S()).look).forEach((l, i) => {
+        const still = l.k === "ft", last = groups[groups.length - 1];
+        const img = h("img", { class: l.k, src: l.src, alt: i === 0 ? "Your hero" : "", draggable: "false" });
+        if (last && last.still === still) last.el.append(img);
+        else groups.push({ still, el: h("div", { class: still ? "q-st" : "q-up" }, img) });
+      });
       return h("div", { class: "q-face" }, h("div", { class: "q-doll " + (cls || ""), style: { "--wv": a.up + "deg", "--wr": a.rest + "deg" } },
-        C.heroLayers(eq, look || C.heroOf(S()).look).map((l, i) => h("img", { class: l.k, src: l.src, alt: i === 0 ? "Your hero" : "", draggable: "false",
-          style: l.k === "w" && glow ? { filter: `drop-shadow(0 0 3px ${glow}) drop-shadow(0 0 2px ${glow})` } : null }))));
+        groups.map(g => g.el)));
     }
 
     /* ---------------------------------------------------- setup */

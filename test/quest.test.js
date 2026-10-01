@@ -239,14 +239,38 @@ test("every art file the game can ask for exists", () => {
 test("hero look: helmet hides hair, armour and boots change the doll, bad input falls back", () => {
   const keys = ls => ls.map(l => l.src.split("/").pop());
   const plain = keys(Q.heroLayers({}));
-  assert.deepStrictEqual(plain, ["hero-body.webp", "hero-boots.webp", "hero-wpn-sword.webp", "hero-hand.webp", "hero-head-kettle.webp", "hero-tail.webp"]);
+  assert.deepStrictEqual(plain, ["hero-cape.webp", "hero-body.webp", "hero-boots.webp", "hero-wpn-sword.webp", "hero-hand.webp", "hero-head-kettle.webp", "hero-blink-kettle.webp", "hero-tail.webp"]);
   const robe = keys(Q.heroLayers({ armor: { slot: "armor", shape: 3 }, boots: { slot: "boots", shape: 2 } }, { helm: false, hair: "twin", hc: "teal" }));
-  assert.deepStrictEqual(robe, ["hero-body-robe.webp", "hero-boots-winged.webp", "hero-hem-robe.webp", "hero-wpn-sword.webp", "hero-hand.webp", "hero-face.webp", "hero-hair-twin-teal.webp"]);
+  assert.deepStrictEqual(robe, ["hero-body-robe.webp", "hero-boots-winged.webp", "hero-hem-robe.webp", "hero-wpn-sword.webp", "hero-hand.webp", "hero-face.webp", "hero-blink-face.webp", "hero-hair-twin-teal.webp"]);
   assert.strictEqual(Q.heroLayers({}).find(l => l.k === "w").src.endsWith("hero-wpn-sword.webp"), true);
   assert.deepStrictEqual(Q.lookOf({ hair: "mohawk", hc: "pink", helm: 0 }), { hair: "short", hc: "brown", helm: true });
   const S = { game: { hero: { cls: "spell", name: "Stan", look: { hair: "long", hc: "ash", helm: false } } } };
   assert.deepStrictEqual(Q.heroOf(S).look, { hair: "long", hc: "ash", helm: false });
   assert.deepStrictEqual(Q.heroOf({ game: { hero: { cls: "spell" } } }).look, { hair: "short", hc: "brown", helm: true });
+});
+
+test("rarity picks its own drawing once it ships, never a tint", () => {
+  const it = { slot: "weapon", shape: 0, r: 4 };
+  assert.strictEqual(Q.artKey("weapon", it), "sword");             // not shipped yet: Common drawing
+  Q.TIERED.add("weapon:sword:4");
+  try {
+    assert.strictEqual(Q.artKey("weapon", it), "sword-r4");
+    assert.ok(Q.iconOf(it).endsWith("w-sword-r4.webp"));
+    assert.ok(Q.heroLayers({ weapon: it }).some(l => l.src.endsWith("hero-wpn-sword-r4.webp")));
+    assert.strictEqual(Q.artKey("weapon", { shape: 0, r: 0 }), "sword");
+  } finally { Q.TIERED.delete("weapon:sword:4"); }
+  const robe = Q.heroLayers({ armor: { slot: "armor", shape: 3, r: 2 } });
+  assert.ok(!robe.some(l => l.k === "cape"));
+});
+
+test("every shipped tier drawing exists, with its doll layers", () => {
+  const PRE = { weapon: ["w-", "hero-wpn-"], helm: ["h-", "hero-head-", "hero-blink-"], armor: ["a-", "hero-body-"], boots: ["b-", "hero-boots-"] };
+  for (const t of Q.TIERED) {
+    const [slot, shape, r] = t.split(":");
+    const files = PRE[slot].map(p => `${p}${shape}-r${r}`);
+    if (shape === "robe") files.push(`hero-hem-robe-r${r}`);
+    for (const f of files) assert.ok(fs.existsSync(path.join(__dirname, "..", Q.art(f))), "missing " + f);
+  }
 });
 
 test("the route passes through every stop in order", () => {

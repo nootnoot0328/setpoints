@@ -35,7 +35,7 @@ This is what lets the app stack hair, face, outfit, boots, helmet and weapon on 
 | Boss | That region's boss. |
 | Hair, face, skin tone, eye and hair colour | Picked by you in **Edit hero**. |
 | Outfit, boots, helmet, weapon | Whatever you have equipped. |
-| Rarity | The icon shows the tier art. On the hero, weapons show their tier because the held weapon is made from the icon. Outfit, boots and helmets show the base look plus a glow for Epic and Legendary. |
+| Rarity | Every tier is its own design, on the icon and on the hero. No tints or glows. See `ART_SPEC_3.md`. |
 
 ---
 
@@ -48,7 +48,7 @@ Do one wave at a time and upload it. Each wave is usable on its own. ChatGPT lim
 | **0. Fight effects and loot** | Slashes, hit sparks, heals, coins and a real chest, so the all-day fight on the map looks like a fight | 3 |
 | **1. Make the hero yours** | Hairstyles, outfits and boots that show on the hero | 13 |
 | **2. Day and night, two new regions** | Forest by day, plus snow and desert regions | 11 |
-| **3. Loot with rarity** | Four-tier art for the current 12 items | 12 |
+| **3. Loot with rarity** | Now `ART_SPEC_3.md`: a separate design per tier | 48 |
 | **4. Four more regions** | Swamp, coast, volcano, haunted keep | 20 |
 | **5. More variety** | More hair and faces, new item types, pets | ~30 |
 
@@ -229,42 +229,9 @@ The forest is done. Snow and desert are Wave 2; the rest are Wave 4.
 
 ---
 
-## Wave 3 — Loot with rarity (12 images)
+## Wave 3 — Loot with rarity
 
-Each file is a square 2x2 sheet showing **the same item in four tiers**. The app uses:
-
-- top-left for Common and Uncommon;
-- top-right for Rare;
-- bottom-left for Epic;
-- bottom-right for Legendary.
-
-Attach the matching single icon from batch 1 (for example `w-sword` cut from `eq-weapon.png`) so the base design stays the same.
-
-```
-2x2 sheet of the SAME [ITEM] in four quality tiers, same angle, same size, same silhouette, each centred in its quarter on a transparent background:
-top-left: plain and simple, basic materials.
-top-right: finer, engraved metal or stitched leather, better materials.
-bottom-left: enchanted, with glowing runes and one coloured gem.
-bottom-right: legendary, gold and gems, the most elaborate, a soft radiant glow.
-Keep the angle and silhouette of the attached icon.
-```
-
-| File | [ITEM] |
-|---|---|
-| `icon-weapon-sword.png` | short sword |
-| `icon-weapon-axe.png` | one-handed axe |
-| `icon-weapon-bow.png` | wooden longbow |
-| `icon-weapon-staff.png` | wizard's staff with a crystal |
-| `icon-helm-kettle.png` | steel kettle helm (helmet only, no head) |
-| `icon-helm-horned.png` | horned helmet (helmet only, no head) |
-| `icon-helm-hood.png` | ranger hood (hood only, no head) |
-| `icon-helm-circlet.png` | thin circlet with a gem (circlet only, no head) |
-| `icon-armor-leather.png` | leather tunic |
-| `icon-armor-chain.png` | chainmail shirt |
-| `icon-armor-plate.png` | steel breastplate |
-| `icon-armor-robe.png` | mage robe |
-
-> The batch-1 helm icons include the hero's head. These new ones should show only the headgear, which reads better in the inventory.
+Replaced by **`ART_SPEC_3.md`**: every rarity tier is its own design, not a recolour.
 
 ---
 
@@ -296,7 +263,7 @@ Edit the attached character. Keep everything identical: same pose, same framing,
 | `hero-face-freckles.png` | the same eyes, with freckles across the nose and a gap-toothed grin |
 | `hero-face-masc.png` | a more masculine face: thicker brows, squarer jaw line, smaller eyes |
 
-**New item types.** Each needs a rarity icon sheet (Wave 3 template). Helmets, outfits and boots also need a hero edit (Wave 1 templates) so they show on the hero. Weapons don't, because the held weapon is made from the icon.
+**New item types.** Each needs tier sheets (the `ART_SPEC_3.md` templates). Helmets, outfits and boots also need a hero edit (Wave 1 templates) so they show on the hero. Weapons don't, because the held weapon is made from the icon.
 
 | Kind | New items | Files |
 |---|---|---|

@@ -7,7 +7,7 @@
 # after scaling to 768 the pixels line up and parts are cut by diffing.
 # Heads are aligned by eye position, weapons by grip point.
 #
-# Stack, back to front: body, boots, hem, weapon, hand, head|face, tail|hair
+# Stack, back to front: cape, body, boots, hem, weapon, hand, head|face, blink, tail|hair
 import sys, math, numpy as np
 from PIL import Image
 from scipy import ndimage as nd
@@ -34,11 +34,21 @@ cape = (base[:, :, 0] > 140) & (base[:, :, 1] < 100) & (base[:, :, 0] - base[:, 
 tail_m &= ~nd.binary_dilation(cape, iterations=1)
 tail = np.zeros_like(base); tail[tail_m] = base[tail_m]
 
+# ---------- cape: everything right of the arm in this box, taken from the bald edit
+# (no ponytail over it). It sways by stretching out from x=CAPE_X, so the seam with
+# the part that stays in the body never opens.
+CAPE_X, CAPE_Y0, CAPE_Y1 = 505, 440, 596
+cape_l = np.zeros_like(bald)
+cape_l[CAPE_Y0:CAPE_Y1, CAPE_X:] = bald[CAPE_Y0:CAPE_Y1, CAPE_X:]
+cape_l[:, :, 3] = np.where(cape_l[:, :, 3] > 110, 255, 0)
+
 def body_from(src, robe=False):
     b = src.copy()
     b[:NECK] = 0; b[KNEE:] = 0
     # the ponytail lives in its own layer; patch the cape behind it from the bald edit
     b[tail_m] = 0 if robe else bald[tail_m]
+    if not robe: b[CAPE_Y0:CAPE_Y1, CAPE_X:] = 0     # the cape is its own layer
+    b[~blobs(b[:, :, 3] > 0, 150)] = 0                # loose specks left by the cuts
     b[495:640, :280] = 0                      # the baked-in sword
     for y in range(495, min(640, KNEE)):
         if b[y, 280, 3] > 0: b[y, 279] = [27, 27, 31, 255]
@@ -65,6 +75,9 @@ hem_m = blobs(diff(robe, base), 60); hem_m[:KNEE] = False; hem_m[660:] = False
 hem_m = nd.binary_dilation(hem_m, iterations=1) & (robe[:, :, 3] > 110); hem_m[:KNEE] = False
 hem = np.zeros_like(robe); hem[hem_m] = robe[hem_m]; layers["hem-robe"] = hem
 
+layers["cape"] = cape_l
+# ---------- blink: the closed-eye frame of the reference idle GIF (art/hero-idle.gif,
+# 12 frames, blink on frame 7, upper body 6px lower on frames 4-9)
 # hand layer: glove and grip, drawn over the weapon
 hand = np.zeros_like(base); hand[503:563, 279:312] = layers["body"][503:563, 279:312]
 layers["hand"] = hand
@@ -93,6 +106,59 @@ for n, (qx, qy) in QUAD.items():
     hd[NECK + 14:] = 0
     hd[:, :, 3] = np.where(hd[:, :, 3] > 110, 255, 0)
     layers["head-" + n] = hd
+
+# ---------- blinks, one per head. Lashes come from the closed-eye frame of the reference
+# idle GIF (art/hero-idle.gif: 12 frames, blink on frame 7, upper body 6px lower on 4-9).
+# Each head's own eyes are found, painted over with its skin, and the lashes placed on them.
+from PIL import ImageSequence
+gif = [np.array(f.convert("RGBA").resize((N, N), Image.NEAREST)) for f in ImageSequence.Iterator(Image.open(f"{SP}/art/hero-idle.gif"))]
+f6, f7 = np.roll(gif[6], -6, 0).astype(int), np.roll(gif[7], -6, 0)
+EYE_BAND = (slice(318, 400), slice(280, 440))
+def eyes_of(img):
+    a = img.astype(int); m = np.zeros((N, N), bool)
+    blue = (a[:, :, 2] > a[:, :, 0] + 30) & (a[:, :, 2] > 120) & (a[:, :, 3] > 0)
+    m[EYE_BAND] = blue[EYE_BAND]
+    m = blobs(m, 25)
+    lab, n = nd.label(m); cs = sorted(nd.center_of_mass(m, lab, range(1, n + 1)), key=lambda c: c[1])
+    l = [c for c in cs if c[1] < 357]; r = [c for c in cs if c[1] >= 357]
+    pick = lambda g: (np.mean([c[1] for c in g]), np.mean([c[0] for c in g]))
+    return m, (pick(l), pick(r))
+lash_m = (np.abs(f7.astype(int) - f6).sum(2) > 60) & (f7[:, :, :3].astype(int).sum(2) < 200) & (f7[:, :, 3] > 0)
+lash_m[:318] = False; lash_m[400:] = False
+lash = np.zeros_like(f7); lash[lash_m] = f7[lash_m]
+_, GIF_EYES = eyes_of(f6.astype(np.uint8))
+def eye_cover(head):
+    """Each eye: grow from the iris through eye-coloured pixels (blue, dark lines,
+    grey-white sclera) up to 34px out, so lashes and whites are covered but hair is not."""
+    m, (le, re) = eyes_of(head)
+    a = head.astype(int); r, g, b_ = a[:, :, 0], a[:, :, 1], a[:, :, 2]
+    lum = a[:, :, :3].sum(2) / 3
+    eyeish = ((b_ > r + 8) | (lum < 95) | ((np.abs(r - b_) < 22) & (lum > 110))) & (a[:, :, 3] > 0)
+    near = np.zeros((N, N), bool)
+    yy, xx = np.mgrid[:N, :N]
+    for cx, cy in (le, re): near |= ((xx - cx) / 38) ** 2 + ((yy - cy) / 34) ** 2 <= 1
+    cover = m.copy()
+    for _ in range(40):
+        grown = nd.binary_dilation(cover) & eyeish & near
+        if (grown | cover).sum() == cover.sum(): break
+        cover |= grown
+    cover = nd.binary_dilation(cover, iterations=1) & near & (a[:, :, 3] > 0)
+    cover = nd.binary_closing(cover, iterations=2) & near & (a[:, :, 3] > 0)
+    return cover, (le, re)
+def blink_for(head):
+    cover, (le, re) = eye_cover(head)
+    a = head.astype(int)
+    skin = (a[:, :, 0] > 200) & (a[:, :, 1] > 170) & (a[:, :, 2] > 150) & (a[:, :, 0] - a[:, :, 2] < 60)
+    ring = nd.binary_dilation(cover, iterations=4) & ~cover & skin
+    sk = np.median(head[ring][:, :3], axis=0).astype(np.uint8)
+    out = np.zeros_like(head); out[cover, :3] = sk; out[cover, 3] = 255
+    ln = place(lash, GIF_EYES, (le, re)); ln[:, :, 3] = np.where(ln[:, :, 3] > 110, 255, 0)
+    k = ln[:, :, 3] > 0; out[k] = ln[k]
+    return out
+for hn in ["kettle", "horned", "hood", "circlet"]:
+    layers["blink-" + hn] = blink_for(layers["head-" + hn])
+layers["blink-face"] = blink_for(layers["face"])
+FACE_EYES = eye_cover(layers["face"])[0]
 
 # ---------- weapons from the icon sheet, put in the hand
 wsheet = load("eq-weapon")
@@ -141,6 +207,9 @@ for s in ["short", "spiky", "long", "twin"]:
     m = blobs(m, 400)
     m = nd.binary_dilation(m, iterations=2) & diff(a, bald, 50)
     m[580:] = False
+    aa = a.astype(int); browny = (aa[:, :, 0] - aa[:, :, 2] > 40) & (aa[:, :, 0] > 70)
+    m &= ~(FACE_EYES & ~browny)               # eyes belong to the face, bangs stay
+    m &= ~((aa[:, :, 2] > aa[:, :, 0] + 10) & (aa[:, :, 2] > 90))   # source hair is brown: blue is a stray eye pixel
     hair = np.zeros_like(a); hair[m] = a[m]
     for c, ramp in HAIR_COLORS.items():
         hh = hair.copy()
@@ -157,7 +226,7 @@ for n, l in layers.items():
         print("outside box:", n, out, "px", xs.min(), ys.min(), xs.max(), ys.max())
 W = BOX[2] - BOX[0]; H = BOX[3] - BOX[1]; k = 400 / max(W, H); tw, th = round(W * k), round(H * k)
 for n, l in layers.items():
-    Image.fromarray(l).crop(BOX).resize((tw, th), Image.LANCZOS).save(f"{OUT}/hero-{n}.webp", "WEBP", quality=92, method=6)
+    Image.fromarray(l).crop(BOX).resize((tw, th), Image.BOX if n.startswith("blink") else Image.LANCZOS).save(f"{OUT}/hero-{n}.webp", "WEBP", quality=92, method=6)
 print(len(layers), "layers", tw, th)
 
 # ---------- previews
@@ -172,5 +241,6 @@ def grid(rows, path):
     P.save(path)
 outfits = ["body", "body-leather", "body-chain", "body-plate", "body-robe"]
 boots = ["boots", "boots-leather", "boots-greaves", "boots-winged", "boots-wraps"]
-grid([[[o, b] + (["hem-robe"] if o == "body-robe" else []) + ["wpn-sword", "hand", "head-kettle", "tail"] for b in boots] for o in outfits], f"{OUT}/prev-gear.png")
-grid([[["body", "boots", "wpn-sword", "hand", "face", f"hair-{s}-{c}"] for c in HAIR_COLORS] for s in ["short", "spiky", "long", "twin"]], f"{OUT}/prev-hair.png")
+grid([[([] if o == "body-robe" else ["cape"]) + [o, b] + (["hem-robe"] if o == "body-robe" else []) + ["wpn-sword", "hand", "head-kettle", "tail"] for b in boots] for o in outfits], f"{OUT}/prev-gear.png")
+grid([[["cape", "body", "boots", "wpn-sword", "hand", hd] + ([f"blink-{hd[5:]}", "tail"] if hd != "face" else ["blink-face", hr]) for hd, hr in [("head-kettle", 0), ("head-horned", 0), ("head-hood", 0), ("head-circlet", 0), ("face", "hair-short-brown"), ("face", "hair-long-black"), ("face", "hair-twin-blonde")]]], f"{OUT}/prev-blink.png")
+grid([[["cape", "body", "boots", "wpn-sword", "hand", "face", f"hair-{s}-{c}"] for c in HAIR_COLORS] for s in ["short", "spiky", "long", "twin"]], f"{OUT}/prev-hair.png")

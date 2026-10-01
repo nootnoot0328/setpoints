@@ -787,8 +787,18 @@ body.onb #app{padding-bottom:40px}
 .q-face{transform-origin:50% 100%}
 .q-hero.flip .q-face{transform:scaleX(-1)}
 .q-doll{transform-origin:50% 100%}
-.q-doll.idle{animation:q-idle 1.3s steps(2,end) infinite}
-@keyframes q-idle{50%{transform:translateY(-2%)}}
+/* Idle loop, frame-matched to the reference GIF: 12 frames x 110ms. The upper body
+   drops one art pixel on frames 4-9 (feet stay planted), the cape stretches out from
+   the shoulder and back, and the hero blinks once every third loop. */
+.q-doll>.q-up,.q-doll>.q-st{position:absolute;inset:0}
+.q-doll>.q-up{animation:q-bob 1.32s step-end infinite}
+@keyframes q-bob{0%{transform:none}33.33%{transform:translateY(max(1px,.93%))}83.33%{transform:none}}
+.q-doll img.cape{transform-origin:72.5% 50%;animation:q-cape 1.32s step-end infinite}
+@keyframes q-cape{0%{transform:none}16.67%{transform:scaleX(1.043)}25%{transform:scaleX(1.087)}33.33%{transform:scaleX(1.13)}41.67%{transform:scaleX(1.174)}66.67%{transform:scaleX(1.13)}75%{transform:scaleX(1.087)}83.33%{transform:scaleX(1.043)}91.67%{transform:none}}
+.q-doll img.bl{opacity:0;animation:q-blink 3.96s step-end infinite}
+@keyframes q-blink{0%{opacity:0}19.44%{opacity:1}22.22%{opacity:0}}
+.q-hero.ko .q-doll img.bl,.q-fighter.ko .q-doll img.bl{animation:none;opacity:0}
+.q-hero.ko .q-up,.q-fighter.ko .q-up,.q-hero.ko img.cape,.q-fighter.ko img.cape{animation:none}
 /* poses: the weapon layer pivots on the grip */
 .q-doll img.w{transform-origin:31.7% 72.6%;transition:transform .3s}
 .q-hero.fight .q-doll,.q-fighter.fight .q-doll{animation:q-lunge-loop 2.4s ease-in-out infinite}
@@ -804,9 +814,7 @@ body.onb #app{padding-bottom:40px}
 @keyframes q-slash{0%,45%{opacity:0;transform:scale(.3)}48%,54%{opacity:1;transform:scale(1.15)}64%,100%{opacity:0;transform:scale(1.4)}}
 .q-mobhp{position:absolute;transform:translate(-50%,-50%);width:13%;height:6px;border-radius:4px;background:rgba(0,0,0,.65);border:1px solid #000;overflow:hidden;z-index:6}
 .q-mobhp i{display:block;height:100%;background:linear-gradient(#FF8A8A,#D9534F)}
-.q-hero.rest .q-doll{animation:q-breath 3.2s ease-in-out infinite}
 .q-hero.rest .q-doll img.w{transform:rotate(var(--wr))}
-@keyframes q-breath{0%,100%{transform:none}50%{transform:scale(1.015,.985)}}
 .q-zz,.q-dizzy,.q-confetti{position:absolute;pointer-events:none;opacity:0}
 .q-zz{right:-25%;top:-18%;width:55%}
 .q-hero.rest .q-zz{animation:q-zz 2.6s ease-in-out infinite}
@@ -1001,7 +1009,7 @@ body.onb #app{padding-bottom:40px}
 .q-dl.bad b,.q-dl.bad .q-ico{color:var(--bad)}
 .q-dl.quiet span{color:var(--faint)}
 @media (prefers-reduced-motion: reduce){
-  .q-mob .body,.q-boss .body,.q-fog,.q-spark,.q-doll,.q-doll img.w,.q-zz,.q-mob.fighting::after,.q-boss.fighting::after,.q-mob.fighting::before,.q-boss.fighting::before,.q-hero.victory .q-confetti,.q-chestpic.wiggle,.q-bigchest.shake,.q-burst,.q-bigicon.pop,.q-fighter.lunge,.q-fighter.lunge-l,.q-fighter.hurt,.q-float{animation:none}
+  .q-mob .body,.q-boss .body,.q-fog,.q-spark,.q-doll,.q-doll img.w,.q-zz,.q-mob.fighting::after,.q-boss.fighting::after,.q-mob.fighting::before,.q-boss.fighting::before,.q-hero.victory .q-confetti,.q-chestpic.wiggle,.q-bigchest.shake,.q-burst,.q-bigicon.pop,.q-fighter.lunge,.q-fighter.lunge-l,.q-fighter.hurt,.q-float,.q-doll>.q-up,.q-doll img.cape,.q-doll img.bl{animation:none}
 }
 /* effect sprites and loot art */
 .q-coin{width:22px;height:22px;object-fit:contain;flex:none}
