@@ -211,9 +211,12 @@
   const RIR_F = [1.25, 1.25, 1.0, 0.8, 0.6];
   /* One week's fight, day by day, from the logs. The boss falls on Sunday if
      its HP is at 0 by then; until Sunday the bar shows the damage so far. */
-  function battle(S, E, ws, td, lv, eq) {
+  /* lv sets the boss (level at the start of the week); heroLv sets your own
+     stats, so the live week matches the level shown on your hero card. */
+  function battle(S, E, ws, td, lv, eq, heroLv) {
     const hero = heroOf(S), gear = gearOf(eq), sk = gear.sk, cls = hero.cls;
-    const st = statsAt(lv, cls, gear), target = weekTarget(S), sun = E.addDays(ws, 6);
+    const st = statsAt(heroLv || lv, cls, gear), target = weekTarget(S), sun = E.addDays(ws, 6);
+    const start = (S.game && S.game.start) || ws;   // no penalties for days before you started
     const boss = bossFor(ws, lv, target, gear.atk);
     const log = ((S.train && S.train.log) || []).filter(s => counts(s) && s.date >= ws && s.date <= sun && s.date <= td)
       .slice().sort((a, b) => a.date.localeCompare(b.date) || (a.at || 0) - (b.at || 0));
@@ -267,12 +270,12 @@
         if (sk.drain) { heal = Math.min(Math.round(st.hp * sk.drain / 100), st.hp - Math.max(0, php)); php = Math.max(0, php) + heal; }
         day.hits.push({ id: s.id, name: s.name || (s.type === "hiit" ? "Intervals" : "Workout"), type: s.type, n, dmg, crits, heal, ko });
       }
-      if (!sess.length && d < td) {
+      if (!sess.length && d < td && d >= start) {
         idle++;
         const sessionsSoFar = log.filter(s => s.date <= d).length;
         if (idle >= 2 && sessionsSoFar < target && bhp > 0) {
           const bh = Math.round(boss.hp * 0.08 * (1 - (sk.seal || 0) / 100));
-          bhp = Math.min(boss.hp, bhp + bh); day.bossHeal = bh;
+          const before = bhp; bhp = Math.min(boss.hp, bhp + bh); day.bossHeal = bhp - before;
           if (wards > 0) { wards--; day.warded = true; }
           else {
             const hit = Math.round(st.hp * 0.3 * (50 / (50 + st.def)));
@@ -342,8 +345,19 @@
     const when = g.ach || {};
     const ach = ACH_TEST.map(t => { try { return !!t(st); } catch (e) { return false; } });
     ach.forEach((ok, i) => { if (ok) list.push({ id: "a:" + i, date: when[i] || td, kind: "feat", label: "Hidden feat found", gold: 100, chest: true, min: 1 }); });
-    const earned = list.reduce((a, e) => a + e.gold, 0), spent = items.reduce((a, i) => a + (i.cost || 0), 0);
-    const lv = levelOf(earned), have = new Set(items.map(i => i.id));
+    let earned = list.reduce((a, e) => a + e.gold, 0);
+    let lv = levelOf(earned);
+    // second pass: the live week uses your current level for your own stats
+    const live = weeks[weeks.length - 1];
+    if (live && !live.frozen && live.stats.hp !== statsAt(lv, hero.cls, gearOf(eq)).hp) {
+      const b2 = battle(S, E, live.ws, td, live.lv, eq, lv);
+      if (b2.won && !live.won) {
+        list.push({ id: "b:" + live.ws, date: b2.sun, kind: "boss", label: `Defeated the ${b2.boss.name}`, gold: 60 + 10 * Math.min(streak + 1, 6) + Math.min(60, Math.round(b2.overkill / 20)), chest: true, min: 1 });
+        streak++; wins++; earned = list.reduce((a, e) => a + e.gold, 0); lv = levelOf(earned);
+      }
+      weeks[weeks.length - 1] = Object.assign(b2, { won: b2.won, flawless: b2.flawless, frozen: false, streak });
+    }
+    const spent = items.reduce((a, i) => a + (i.cost || 0), 0), have = new Set(items.map(i => i.id));
     return {
       events: list.sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id)),
       pending: list.filter(e => e.chest && !have.has(e.id)).sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id)),
@@ -537,10 +551,15 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
     function pendingCount() { try { return summary().pending.length; } catch (e) { return 0; } }
 
     /* ---------------------------------------------------- the hero (paper doll) */
+    // Weapon angles for poses, measured from how each weapon sits in the hand
+    const POSE_ANGLE = { sword: { up: 72, rest: -63 }, axe: { up: -22, rest: 0 }, bow: { up: 125, rest: 0 }, staff: { up: -11, rest: 0 } };
     function doll(eq, cls) {
       const glow = eq && eq.weapon && eq.weapon.r >= 3 ? C.RCOL[eq.weapon.r] : null;
-      return h("div", { class: "q-doll " + (cls || "") }, C.heroLayers(eq).map((src, i) => h("img", { src, alt: i === 0 ? "Your hero" : "", draggable: "false",
-        style: i === 1 && glow ? { filter: `drop-shadow(0 0 3px ${glow}) drop-shadow(0 0 2px ${glow})` } : null })));
+      const wk = eq && eq.weapon ? C.SHAPES.weapon[eq.weapon.shape] : "sword", a = POSE_ANGLE[wk];
+      const LAYER = ["b", "w", "hn", "hd"];
+      return h("div", { class: "q-face" }, h("div", { class: "q-doll " + (cls || ""), style: { "--wv": a.up + "deg", "--wr": a.rest + "deg" } },
+        C.heroLayers(eq).map((src, i) => h("img", { class: LAYER[i], src, alt: i === 0 ? "Your hero" : "", draggable: "false",
+          style: i === 1 && glow ? { filter: `drop-shadow(0 0 3px ${glow}) drop-shadow(0 0 2px ${glow})` } : null }))));
     }
 
     /* ---------------------------------------------------- setup */
@@ -590,8 +609,8 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
       stage.append(h("div", { class: "q-bossbar" },
         h("div", { class: "q-bossrow" }, h("b", null, w.boss.name), h("span", null, w.won ? "Defeated" : `HP ${fmt(w.bhp)} / ${fmt(w.hp)}`)),
         h("div", { class: "q-bar" }, h("i", { style: { width: (bossPct * 100).toFixed(1) + "%" } }))));
-      at("q-ent q-sign", 17, 62, im("signpost"));
-      at("q-ent q-flag", 37, 90.5, im("flag", "Start"));
+      at("q-ent q-sign", 13, 84, im("signpost"));
+      at("q-ent q-flag", 36, 91, im("flag", "Start"));
       const mobEls = [];
       stops.forEach((st, i) => {
         const [x, y] = C.STOPS_XY[i], boss = st.kind === "boss";
@@ -602,32 +621,47 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
         } else mobEls[i] = at("q-ent q-boss" + (w.won ? " dead" : ""), x, y + 1.5, h("div", { class: "body" }, im(w.boss.art, w.boss.name)));
         const state = boss ? (w.won ? "done" : i === t ? "now" : "boss") : st.met ? "done" : st.missed ? "miss" : st.pending ? "wait" : st.today ? "now" : "";
         const tag = boss ? (w.won ? "Defeated" : "Boss") : st.met ? "Beaten" : st.missed ? "Escaped" : st.pending ? "Waiting" : st.today ? `${Math.min(99, Math.floor((st.steps || 0) / st.goal * 100))}%` : "";
-        const side = x > 50 ? -1 : 1;
+        const side = x >= 50 ? 1 : -1;   // labels on the outer side, away from where the hero stands
         at("q-stop", x + side * (boss ? 22 : 17), y - (boss ? 6 : 2), h("button", { class: "q-chip " + state, "aria-label": `${DAYN[i]}, ${boss ? w.boss.name : C.MOBS[st.mob]}${tag ? ", " + tag : ""}`, onclick: () => daySheet(i, sum) },
           h("b", null, DAYN[i]), tag ? h("span", null, tag) : null));
       });
       if (!reduce()) for (let i = 0; i < 12; i++) at("q-spark", 6 + rand() * 88, 30 + rand() * 62).style.animationDelay = (-rand() * 4).toFixed(2) + "s";
-      const stopAt = i => ROUTE.at[i] - (i === 6 ? 15 : stops[i].met ? 0 : 7);
+      const stopAt = i => ROUTE.at[i] - (i === 6 ? 15 : stops[i].met ? 0 : 13);   // stand off to fight, on the platform once it's beaten
       const heroS = stopAt(t);
-      const hero = at("q-ent q-hero idle", 0, 0, h("div", { class: "q-shadow" }), doll(sum.eq));
+      const hero = at("q-ent q-hero", 0, 0, h("div", { class: "q-shadow" }), doll(sum.eq));
       const place = (s, hop) => { const p = ROUTE.pointAt(s); hero.style.left = p.x + "%"; hero.style.top = (p.y - (hop || 0)) + "%"; walked.style.strokeDashoffset = ROUTE.len - s; };
       place(heroS);
+      // What the hero is doing right now: fighting today's foe all day, resting once it's beaten,
+      // celebrating a fallen boss, or knocked out at 0 HP.
+      const foe = mobEls[t], ko = w.php <= 0 && !w.won;
+      const pose = ko ? "ko" : t === 6 ? (w.won ? "victory" : "fight") : (stops[t].met ? "rest" : "fight");
+      const faceFoe = () => hero.classList.toggle("flip", C.STOPS_XY[t][0] > ROUTE.pointAt(heroS).x + 0.5);
+      const POSES = ["fight", "rest", "victory", "ko"];
+      const setPose = p => { POSES.forEach(c => hero.classList.toggle(c, c === p)); if (foe) foe.classList.toggle("fighting", p === "fight"); if (p) faceFoe(); };
+      hero.append(h("span", { class: "q-zz", "aria-hidden": "true" }, "z", h("small", null, "z")), h("span", { class: "q-dizzy", "aria-hidden": "true" }, "✦ ✧ ✦"));
+      hero.classList.toggle("ko-l", C.STOPS_XY[t][0] >= 50);   // fall away from the day label
+      setPose(pose);
+      if (pose === "fight" && t < 6) {
+        const left = Math.max(0, 1 - (stops[t].steps || 0) / stops[t].goal), [mx, my] = C.STOPS_XY[t];
+        at("q-mobhp", mx, my - (C.FLYING[stops[t].mob] ? 14 : 9.5), h("i", { style: { width: (left * 100).toFixed(1) + "%" } }));
+      }
       const pop = (txt, x, y, cls) => { const p = at("q-pop" + (cls ? " " + cls : ""), x, y); p.textContent = txt; setTimeout(() => p.remove(), 950); };
       function walk(from, to, ms) {
         return new Promise(res => {
           const t0 = performance.now(), right = ROUTE.pointAt(to).x > ROUTE.pointAt(from).x;
-          hero.classList.toggle("flip", right); hero.classList.remove("idle");
+          hero.classList.toggle("flip", right);
           const f = now => {
             if (!hero.isConnected) return res();
             const k = Math.min(1, (now - t0) / ms), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
             place(from + (to - from) * e, Math.abs(Math.sin(k * Math.PI * 5)) * 1.4);
-            if (k < 1) requestAnimationFrame(f); else { hero.classList.add("idle"); res(); }
+            if (k < 1) requestAnimationFrame(f); else res();
           };
           requestAnimationFrame(f);
         });
       }
       async function strike(el, xy, dmg) {
-        hero.animate([{ transform: "translate(-50%,-100%)" }, { transform: "translate(-38%,-104%)" }, { transform: "translate(-50%,-100%)" }], { duration: 300, easing: "ease-out" });
+        const dx = hero.classList.contains("flip") ? "-38%" : "-62%";
+        hero.animate([{ transform: "translate(-50%,-100%)" }, { transform: `translate(${dx},-104%)` }, { transform: "translate(-50%,-100%)" }], { duration: 300, easing: "ease-out" });
         await sleep(140);
         el.classList.remove("hit"); void el.offsetWidth; el.classList.add("hit");
         pop("−" + dmg, xy[0], xy[1] - 11);
@@ -642,17 +676,18 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
         if (!fresh.length || reduce()) return;
         fresh.forEach(i => mobEls[i].classList.remove("dead"));
         let s0 = ROUTE.at[Math.max(0, fresh[0] - 1)];
-        place(s0);
+        setPose(null); place(s0);
         (async () => {
           for (const i of fresh) {
-            await walk(s0, ROUTE.at[i] - 7, 1300);
+            await walk(s0, ROUTE.at[i] - 13, 1300);
             for (let k = 0; k < 2; k++) await strike(mobEls[i], C.STOPS_XY[i], 30 + Math.floor(rand() * 60));
             mobEls[i].classList.add("dead"); pop("+15 gold", C.STOPS_XY[i][0], C.STOPS_XY[i][1] - 15, "gold");
             await sleep(350);
-            await walk(ROUTE.at[i] - 7, ROUTE.at[i], 350); s0 = ROUTE.at[i];
+            await walk(ROUTE.at[i] - 13, ROUTE.at[i], 450); s0 = ROUTE.at[i];
           }
           if (Math.abs(s0 - heroS) > 0.5) await walk(s0, heroS, 900);
-          hero.classList.remove("flip");
+          if (pose === "rest") { setPose("victory"); await sleep(2600); }
+          setPose(pose);
         })();
       };
       return stage;
@@ -692,6 +727,8 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
         h("div", { class: "q-xp steps", role: "progressbar", "aria-label": "Steps today", "aria-valuemin": 0, "aria-valuemax": 100, "aria-valuenow": Math.round(pct * 100) }, h("i", { style: { width: (pct * 100).toFixed(1) + "%" } })),
         h("p", { class: "note q-stepnote" }, stepLine),
         h("div", { class: "q-rows" },
+          w.php <= 0 && !w.won ? h("div", { class: "q-row bad" }, ico("heart"), h("div", null, h("b", null, "Knocked out"),
+            h("span", null, "You hit at half power until you heal. A day on calorie and protein target heals the most."))) : null,
           h("div", { class: "q-row" }, ico("sword"), h("div", null, h("b", null, "Train"),
             h("span", null, setsToday ? `${setsToday} sets today: ${fmt(dmgToday)} damage to the boss.` : `Every working set hits the boss. ${w.sessions} of ${w.target} sessions this week.`))),
           h("div", { class: "q-row" }, ico("food"), h("div", null, h("b", null, "Eat on target"),
@@ -714,7 +751,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
             h("div", { class: "q-stats" },
               h("span", null, ico("sword", "sm"), h("b", null, sts.atk), " ATK"),
               h("span", null, ico("shield", "sm"), h("b", null, sts.def), " DEF"),
-              h("span", null, ico("heart", "sm"), h("b", null, sts.hp), " HP")))),
+              h("span", null, ico("heart", "sm"), h("b", null, `${Math.max(0, w.php)} / ${sts.hp}`), " HP")))),
         h("div", { class: "q-eqrow" }, C.SLOTS.map(slot => {
           const it = sum.eq[slot];
           return h("button", { class: "q-eq", style: { "--rc": it ? C.RCOL[it.r] : "var(--card3)" }, "aria-label": `${C.SLOT_NAME[slot]}: ${it ? it.name : "empty"}`, onclick: () => slotSheet(slot) },
@@ -780,7 +817,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
           h("span", null, w.won ? `It fell on Sunday.${w.overkill ? ` ${fmt(w.overkill)} extra damage earned bonus gold.` : ""}` : `You've dealt ${fmt(w.dmg)} of ${fmt(w.hp)}. It falls on Sunday if its HP is at 0. Rally from beaten monsters: +${w.rally}%.`))));
         if (day && day.hits.length) rows.append(h("div", { class: "q-row" }, ico("sword"), h("div", null, h("b", null, "Training"), h("span", null, day.hits.map(x => `${x.name}: ${x.type === "hiit" ? x.n + " rounds" : x.n + " sets"}, ${fmt(x.dmg)} damage`).join(". ") + "."))));
         if (day && day.food != null) rows.append(h("div", { class: "q-row" }, ico("food"), h("div", null, h("b", null, "Food"), h("span", null, (day.food === 2 ? "On target" : day.food === 1 ? "Half on target" : "Logged, off target") + (day.heal ? `: healed ${day.heal} HP.` : ".")))));
-        if (day && day.strike) rows.append(h("div", { class: "q-row bad" }, ico("shield"), h("div", null, h("b", null, "The boss struck"), h("span", null, `After two idle days it recovered ${fmt(day.bossHeal)} HP and hit you for ${day.strike}.`))));
+        if (day && day.strike) rows.append(h("div", { class: "q-row bad" }, ico("shield"), h("div", null, h("b", null, "The boss struck"), h("span", null, `After two idle days it ${day.bossHeal ? `recovered ${fmt(day.bossHeal)} HP and ` : ""}hit you for ${day.strike}.`))));
         sh.append(rows);
         if (isBoss) sh.append(h("button", { class: "btn block", style: { marginTop: "14px" }, onclick: () => { X.closeSheet(true); X.push({ v: "qbattle", ws: w.ws }); } }, "Battle log"));
       });
@@ -868,7 +905,8 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
       const sum = summary(), w = sum.weeks.find(x => x.ws === top.ws) || sum.week;
       const root = h("div", { class: "quest" });
       root.append(X.subhead("Battle log"));
-      const heroPic = h("div", { class: "q-fighter hero" }, doll(sum.eq));
+      const endPose = w.won ? "victory" : w.php <= 0 ? "ko" : "";
+      const heroPic = h("div", { class: "q-fighter hero " + endPose }, doll(sum.eq));
       const bossPic = h("div", { class: "q-fighter boss" + (w.won ? " dead" : "") }, h("img", { src: C.art(w.boss.art), alt: w.boss.name }));
       const pop = h("div", { class: "q-popwrap" });
       const hpBar = (cur, max, cls) => h("div", { class: "q-hp " + cls }, h("i", { style: { width: (Math.max(0, Math.min(1, cur / max)) * 100).toFixed(1) + "%" } }), h("span", null, `${fmt(Math.max(0, cur))} / ${fmt(max)}`));
@@ -884,7 +922,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
       const kick = (el, cls) => { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); };
       let playing = false;
       const replay = h("button", { class: "btn primary", onclick: async () => {
-        if (playing) return; playing = true; replay.disabled = true; bossPic.classList.remove("dead");
+        if (playing) return; playing = true; replay.disabled = true; bossPic.classList.remove("dead"); heroPic.classList.remove("victory", "ko");
         let b = w.hp, p = w.stats.hp; setBars(b, p);
         for (const d of w.days) {
           if (d.heal) { p = Math.min(w.stats.hp, p + d.heal); float("+" + d.heal, "heal"); setBars(b, p); await sleep(420); }
@@ -899,6 +937,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
           else if (d.warded) { float("Blocked", "heal"); await sleep(380); }
         }
         if (w.won) bossPic.classList.add("dead");
+        if (endPose) heroPic.classList.add(endPose);
         playing = false; replay.disabled = false;
       } }, "Replay the week");
       root.append(h("div", { class: "btnrow", style: { margin: "12px 0" } }, replay));

@@ -130,6 +130,23 @@ test("soft penalty: two idle days let the boss heal and strike, only before the 
   assert.ok(!Q.battle(S2, E, LAST, TD, 1, {}).days.some(d => d.strike > 0));
 });
 
+test("no penalties for days before you started Quest, and boss healing is only logged when it heals", () => {
+  const S = blank(); S.game.start = TD;          // started Wednesday; Mon and Tue were idle
+  const b = Q.battle(S, E, "2026-09-28", TD, 1, {});
+  assert.ok(!b.days.some(d => d.strike || d.bossHeal), "Mon/Tue before the start must not count");
+  const S2 = blank(); S2.game.start = "2026-09-01";
+  const b2 = Q.battle(S2, E, "2026-09-28", TD, 1, {});
+  assert.ok(b2.days.some(d => d.strike > 0));
+  assert.ok(b2.days.every(d => d.bossHeal === 0), "a boss at full HP can't recover");
+});
+
+test("this week's fight uses your current level, matching the hero card", () => {
+  const S = blank();
+  S.train.log.push(lift("a", "2026-09-22", 24), lift("b", "2026-09-24", 24), lift("c", "2026-09-26", 24), lift("d", "2026-09-29", 10));
+  const sum = Q.summary(S, E, TD);
+  assert.strictEqual(sum.week.stats.hp, sum.stats.hp);
+});
+
 test("gear stats and skills change the fight", () => {
   const S = blank();
   S.train.log.push(lift("a", "2026-09-28", 12, 1, { at: new Date("2026-09-28T07:30:00").getTime() }));
