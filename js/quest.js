@@ -64,6 +64,8 @@
     goblin: "Goblin Scout", wolf: "Grey Wolf", skeleton: "Rattlebones", wisp: "Will-o'-wisp" };
   const MOB_KEYS = Object.keys(MOBS);
   const FLYING = { bat: 1, wisp: 1 };
+  /* Size relative to the hero, so a slime is small, a goblin is about your height and bosses tower over you. */
+  const MOB_SCALE = { slime: 0.8, mushroom: 0.85, boar: 1.05, bat: 0.85, goblin: 1.0, wolf: 1.05, skeleton: 1.0, wisp: 0.8 };
   const BOSSES = [{ art: "boss-golem", names: ["Mossback Golem", "Ironbark Golem", "Cragheart Golem", "Rune-scarred Golem", "Old Stoneface", "Thornroot Golem"] }];
 
   /* Skill effects the battle engine runs. p[] is potency by rarity (uncommon → legendary). */
@@ -487,7 +489,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
     return `<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true">${out}</svg>`;
   }
 
-  const Core = { RAR, RCOL, ODDS, PITY_RARE, PITY_LEG, CHEST_COST, RALLY, SLOTS, SLOT_NAME, SHAPES, NOUN, SKILLS, CLASSES, RANKS, MOBS, FLYING, STARTER, THEME, STOPS_XY,
+  const Core = { RAR, RCOL, ODDS, PITY_RARE, PITY_LEG, CHEST_COST, RALLY, SLOTS, SLOT_NAME, SHAPES, NOUN, SKILLS, CLASSES, RANKS, MOBS, FLYING, MOB_SCALE, STARTER, THEME, STOPS_XY,
     art, doneSets, stepGoal, stepsOn, dayStatus, mobsForWeek, weekStops, levelOf, rankOf, statsAt, gearOf, equipped, heroOf, baseEvents, battle, bossFor, summary,
     pityOf, rollRarity, localItem, aiPrompt, parseItem, migrateItem, iconOf, heroLayers, buildRoute, achText, ACH_COUNT: ACH.length, chestSVG, hashF, seeded };
   if (typeof module === "object" && module.exports) { module.exports = Core; return; }
@@ -618,6 +620,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
         if (!boss) {
           const cls = "q-ent q-mob" + (C.FLYING[st.mob] ? " fly" : "") + (st.met ? " dead" : "") + (st.missed ? " gone" : "");
           mobEls[i] = at(cls, x, y - (C.FLYING[st.mob] ? 5 : 0), h("div", { class: "body", style: { animationDelay: (-i * 0.37) + "s" } }, im(st.mob, C.MOBS[st.mob])));
+          mobEls[i].style.width = (12 * (C.MOB_SCALE[st.mob] || 1)).toFixed(1) + "%";
         } else mobEls[i] = at("q-ent q-boss" + (w.won ? " dead" : ""), x, y + 1.5, h("div", { class: "body" }, im(w.boss.art, w.boss.name)));
         const state = boss ? (w.won ? "done" : i === t ? "now" : "boss") : st.met ? "done" : st.missed ? "miss" : st.pending ? "wait" : st.today ? "now" : "";
         const tag = boss ? (w.won ? "Defeated" : "Boss") : st.met ? "Beaten" : st.missed ? "Escaped" : st.pending ? "Waiting" : st.today ? `${Math.min(99, Math.floor((st.steps || 0) / st.goal * 100))}%` : "";
@@ -626,7 +629,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
           h("b", null, DAYN[i]), tag ? h("span", null, tag) : null));
       });
       if (!reduce()) for (let i = 0; i < 12; i++) at("q-spark", 6 + rand() * 88, 30 + rand() * 62).style.animationDelay = (-rand() * 4).toFixed(2) + "s";
-      const stopAt = i => ROUTE.at[i] - (i === 6 ? 15 : stops[i].met ? 0 : 13);   // stand off to fight, on the platform once it's beaten
+      const stopAt = i => ROUTE.at[i] - (i === 6 ? 17 : stops[i].met ? 0 : 11);   // stand off to fight, on the platform once it's beaten
       const heroS = stopAt(t);
       const hero = at("q-ent q-hero", 0, 0, h("div", { class: "q-shadow" }), doll(sum.eq));
       const place = (s, hop) => { const p = ROUTE.pointAt(s); hero.style.left = p.x + "%"; hero.style.top = (p.y - (hop || 0)) + "%"; walked.style.strokeDashoffset = ROUTE.len - s; };
@@ -643,7 +646,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
       setPose(pose);
       if (pose === "fight" && t < 6) {
         const left = Math.max(0, 1 - (stops[t].steps || 0) / stops[t].goal), [mx, my] = C.STOPS_XY[t];
-        at("q-mobhp", mx, my - (C.FLYING[stops[t].mob] ? 14 : 9.5), h("i", { style: { width: (left * 100).toFixed(1) + "%" } }));
+        at("q-mobhp", mx, my - (C.FLYING[stops[t].mob] ? 12.5 : 8), h("i", { style: { width: (left * 100).toFixed(1) + "%" } }));
       }
       const pop = (txt, x, y, cls) => { const p = at("q-pop" + (cls ? " " + cls : ""), x, y); p.textContent = txt; setTimeout(() => p.remove(), 950); };
       function walk(from, to, ms) {
@@ -679,11 +682,11 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
         setPose(null); place(s0);
         (async () => {
           for (const i of fresh) {
-            await walk(s0, ROUTE.at[i] - 13, 1300);
+            await walk(s0, ROUTE.at[i] - 11, 1300);
             for (let k = 0; k < 2; k++) await strike(mobEls[i], C.STOPS_XY[i], 30 + Math.floor(rand() * 60));
             mobEls[i].classList.add("dead"); pop("+15 gold", C.STOPS_XY[i][0], C.STOPS_XY[i][1] - 15, "gold");
             await sleep(350);
-            await walk(ROUTE.at[i] - 13, ROUTE.at[i], 450); s0 = ROUTE.at[i];
+            await walk(ROUTE.at[i] - 11, ROUTE.at[i], 450); s0 = ROUTE.at[i];
           }
           if (Math.abs(s0 - heroS) > 0.5) await walk(s0, heroS, 900);
           if (pose === "rest") { setPose("victory"); await sleep(2600); }

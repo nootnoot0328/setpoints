@@ -767,7 +767,7 @@ body.onb #app{padding-bottom:40px}
 .q-ent img{display:block;width:100%;height:auto;-webkit-user-drag:none}
 .q-plat{width:21%}.q-plat.boss{width:34%}
 .q-sign{width:9%}.q-flag{width:10%}
-.q-mob{width:15%}
+.q-mob{width:12%}   /* times the per-monster scale set inline */
 .q-mob,.q-boss{overflow:visible}
 .q-mob .body{animation:q-bob 1.6s ease-in-out infinite;transform-origin:50% 100%}
 .q-mob.fly .body{animation:q-fly 1.4s ease-in-out infinite}
@@ -776,14 +776,14 @@ body.onb #app{padding-bottom:40px}
 .q-mob.gone{opacity:.18;filter:grayscale(1)}
 @keyframes q-bob{0%,100%{transform:scale(1,1)}50%{transform:scale(1.05,.93)}}
 @keyframes q-fly{0%,100%{transform:translateY(0)}50%{transform:translateY(-10%)}}
-.q-boss{width:32%}
+.q-boss{width:38%}
 .q-boss .body{animation:q-breathe 2.6s ease-in-out infinite;transform-origin:50% 100%}
 .q-boss.dead{filter:grayscale(1) brightness(.5);opacity:.65}
 .q-boss.dead .body{animation:none}
 @keyframes q-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.03,1.015)}}
 .hit .body{animation:q-hit .38s ease-out !important}
 @keyframes q-hit{0%{filter:brightness(3) saturate(0)}30%{transform:translateX(7%)}60%{transform:translateX(-5%)}100%{filter:none;transform:none}}
-.q-hero{width:18%;z-index:5}
+.q-hero{width:12.5%;z-index:5}
 .q-face{transform-origin:50% 100%}
 .q-hero.flip .q-face{transform:scaleX(-1)}
 .q-doll{transform-origin:50% 100%}
@@ -956,7 +956,8 @@ body.onb #app{padding-bottom:40px}
 /* battle log */
 .q-arena{border-radius:var(--r);overflow:hidden;background:var(--card)}
 .q-arenarow{position:relative;display:flex;justify-content:space-between;align-items:flex-end;gap:8px;background:#0E1630 center 62%/cover no-repeat;padding:24px 14px 10px;min-height:220px}
-.q-fighter{width:42%}
+.q-fighter{width:30%}
+.q-fighter.boss{width:58%}
 .q-fighter.hero .q-face{transform:scaleX(-1)}
 .q-fighter.boss img{width:100%;display:block}
 .q-fighter.dead{filter:grayscale(1);opacity:.45}

@@ -45,11 +45,50 @@ Do one wave at a time and upload it. Each wave is usable on its own. ChatGPT lim
 
 | Wave | What you'll get | Images |
 |---|---|---|
+| **0. Fight effects and loot** | Slashes, hit sparks, heals, coins and a real chest, so the all-day fight on the map looks like a fight | 3 |
 | **1. Make the hero yours** | Hairstyles, outfits and boots that show on the hero | 13 |
 | **2. Day and night, two new regions** | Forest by day, plus snow and desert regions | 11 |
 | **3. Loot with rarity** | Four-tier art for the current 12 items | 12 |
 | **4. Four more regions** | Swamp, coast, volcano, haunted keep | 20 |
 | **5. More variety** | More hair and faces, new item types, pets | ~30 |
+
+**Sizes don't matter.** Draw each creature to fill its frame. The app sets sizes relative to the hero: a slime is small, a goblin is about your height, a boss towers over you. If a new monster should be unusually big or small, say so when you upload.
+
+---
+
+## Wave 0 — Fight effects and loot (3 images)
+
+These play on top of the map and battle screens. They work with any gear, because they're separate from the hero. Square 2x2 sheets on a transparent background, no characters.
+
+**`fx-a.png`**
+
+```
+2x2 sheet of pixel-art combat effects, same style as the attached sprites, transparent background, each centred in its quarter, no characters:
+top-left: a white and pale-gold sword slash arc, curved, like a crescent swipe.
+top-right: an impact burst: a jagged white star with small orange sparks flying outwards.
+bottom-left: green healing sparkles: small plus signs and glowing dots rising in a column.
+bottom-right: a burst of gold coins and small stars popping outwards.
+```
+
+**`fx-b.png`**
+
+```
+2x2 sheet of pixel-art status effects, same style, transparent background, each centred in its quarter, no characters:
+top-left: a small puff of dust and grass, like a footstep kick-up.
+top-right: a speech-bubble-free sleepy "zZ" made of soft blue cloud shapes (no letters, just the cloud-puffs shaped like a sleep bubble trail).
+bottom-left: a ring of yellow dizzy stars, viewed slightly from above.
+bottom-right: a victory burst: gold confetti, ribbons and sparkles exploding upwards.
+```
+
+**`loot.png`** (from batch 1, still missing)
+
+```
+2x2 sheet of loot icons:
+top-left: a closed wooden treasure chest with gold trim and a lock.
+top-right: the same chest open, with golden light and coins spilling out.
+bottom-left: a single shiny gold coin, slightly tilted.
+bottom-right: a single cut blue gem, sparkling.
+```
 
 ---
 
@@ -266,6 +305,18 @@ Edit the attached character. Keep everything identical: same pose, same framing,
 | Outfits | ranger cloak and leathers, martial artist's wrap top, noble's long coat, fur-lined winter coat | `icon-armor-ranger` … plus `hero-outfit-ranger` … |
 | Boots | sandals, fur boots | `icon-boots-sandals`, `-fur` plus `hero-boots-sandals`, `-fur` |
 | Boots rarity | the four existing boots | `icon-boots-leather`, `-greaves`, `-winged`, `-wraps` |
+
+**Optional: drawn poses.** The app already makes fighting, resting, victory and knocked-out poses by moving the existing layers. Drawn poses look better (arms up for victory, a real slump when knocked out), but a pose image can't stack gear layers, so it shows whatever the pose image itself is wearing. The app would use them only for the 3-second victory cheer and the knocked-out moment. Make them only if that trade-off is worth it to you. Attach `hero-mid.png`:
+
+```
+Edit the attached character. Same character, same face, same hair, same helmet, same clothes, same sword, same size and position in the image. Change ONLY the pose to: [POSE]. Transparent background.
+```
+
+| File | [POSE] |
+|---|---|
+| `hero-pose-victory.png` | jumping with joy, sword raised high in the right hand, other fist pumped, big smile |
+| `hero-pose-ko.png` | knocked out, slumped sitting on the ground, swirly dazed eyes, sword dropped beside her |
+| `hero-pose-rest.png` | sitting cross-legged on the ground, relaxed smile, sword resting across the lap |
 
 **Pets.** These sit beside your hero on the map. Use 2x2 sheets, sitting, three-quarter view facing right, same small size, transparent background:
 
