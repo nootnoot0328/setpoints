@@ -229,8 +229,8 @@ test("every art file the game can ask for exists", () => {
     for (const cls of Object.keys(Q.CLASSES))
       Q.heroLayers({ [slot]: { slot, shape: sh } }, null, cls).forEach(l => { files.add(l.src); if (l.mask) files.add(l.mask); });
   }
-  for (const hair of Q.HAIRS) for (const hc of Object.keys(Q.HAIR_COLORS)) for (const helm of [true, false])
-    Q.heroLayers({}, { hair, hc, helm }).forEach(l => { files.add(l.src); if (l.mask) files.add(l.mask); });
+  for (const hair of Q.HAIRS) for (const hc of Object.keys(Q.HAIR_COLORS)) for (const helm of [true, false]) for (const face of Q.FACES)
+    Q.heroLayers({}, { hair, hc, helm, face }).forEach(l => { files.add(l.src); if (l.mask) files.add(l.mask); });
   Object.keys(Q.MOBS).forEach(m => files.add(Q.art(m)));
   ["bg-forest", "platform", "platform-boss", "flag", "signpost"].forEach(k => files.add(Q.art(k)));
   for (let w = 0; w < 20; w++) files.add(Q.art(Q.bossFor(E.addDays("2026-01-05", w * 7), 1, 3).art));
@@ -257,10 +257,12 @@ test("hero look: hair shows under any helmet, class sets the outfit, armour and 
     "hero-face.webp", "hero-blink-face.webp", "hero-hair-twin-teal.webp"]);
   assert.ok(!robe.some(l => l.mask));
   assert.deepStrictEqual(keys(Q.heroLayers({ armor: { slot: "armor", shape: 0 } }, null, "spell")).slice(0, 2), ["hero-cape.webp", "hero-body-leather.webp"]);
-  assert.deepStrictEqual(Q.lookOf({ hair: "mohawk", hc: "pink", helm: 0 }), { hair: "short", hc: "brown", helm: true });
+  assert.deepStrictEqual(Q.lookOf({ hair: "mohawk", hc: "pink", helm: 0, face: "elf" }), { face: "classic", hair: "short", hc: "brown", helm: true });
+  const moon = keys(Q.heroLayers({}, { face: "moon", hair: "moon", hc: "frost" }, "spell"));
+  assert.ok(moon.includes("hero-face-moon.webp") && moon.includes("hero-blink-face-moon.webp") && moon.includes("hero-hair-moon-frost.webp"));
   const S = { game: { hero: { cls: "spell", name: "Stan", look: { hair: "long", hc: "ash", helm: false } } } };
-  assert.deepStrictEqual(Q.heroOf(S).look, { hair: "long", hc: "ash", helm: false });
-  assert.deepStrictEqual(Q.heroOf({ game: { hero: { cls: "spell" } } }).look, { hair: "short", hc: "brown", helm: true });
+  assert.deepStrictEqual(Q.heroOf(S).look, { face: "classic", hair: "long", hc: "ash", helm: false });
+  assert.deepStrictEqual(Q.heroOf({ game: { hero: { cls: "spell" } } }).look, { face: "classic", hair: "short", hc: "brown", helm: true });
 });
 
 test("rarity picks its own drawing once it ships, never a tint", () => {

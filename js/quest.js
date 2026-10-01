@@ -143,9 +143,12 @@
   const HAIRS = ["short", "spiky", "long", "twin", "moon"];
   const HAIR_NAME = { short: "Short", spiky: "Spiky", long: "Long", twin: "Twin tails", moon: "Moon bun" };
   const HAIR_COLORS = { brown: "#8a5a3a", black: "#34313f", blonde: "#deac4e", ash: "#d6cec8", auburn: "#aa3c28", teal: "#2c8e92", frost: "linear-gradient(160deg,#cfe6fa 35%,#c4a6ea)" };
+  const FACES = ["classic", "moon"];
+  const FACE_NAME = { classic: "Classic", moon: "Moon" };
   function lookOf(l) {
     l = l || {};
-    return { hair: HAIRS.includes(l.hair) ? l.hair : "short", hc: HAIR_COLORS[l.hc] ? l.hc : "brown", helm: l.helm !== false };
+    return { face: FACES.includes(l.face) ? l.face : "classic", hair: HAIRS.includes(l.hair) ? l.hair : "short",
+      hc: HAIR_COLORS[l.hc] ? l.hc : "brown", helm: l.helm !== false };
   }
   function heroOf(S) {
     const h = (S.game && S.game.hero) || {};
@@ -474,7 +477,8 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
     const L = robe ? [] : [["cape", "hero-cape"]];   // robes have no cape
     L.push(["b", "hero-body" + (ar ? "-" + ar : "")], ["ft", "hero-boots" + (bt ? "-" + bt : "")]);
     if (robe) L.push(["hem", "hero-hem-" + ar]);
-    L.push(["w", "hero-wpn-" + w], ["hn", "hero-hand"], ["hd", "hero-face"], ["bl", "hero-blink-face"]);
+    const fc = look.face === "classic" ? "" : "-" + look.face;
+    L.push(["w", "hero-wpn-" + w], ["hn", "hero-hand"], ["hd", "hero-face" + fc], ["bl", "hero-blink-face" + fc]);
     const hairL = ["hr", `hero-hair-${look.hair}-${look.hc}`];
     if (look.helm && HAIR_MASKED.has(hd.split("-")[0])) hairL.push("hero-hairmask-" + hd);
     L.push(hairL);
@@ -531,7 +535,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
 
   const Core = { RAR, RCOL, ODDS, PITY_RARE, PITY_LEG, CHEST_COST, RALLY, SLOTS, SLOT_NAME, SHAPES, NOUN, SKILLS, CLASSES, RANKS, MOBS, FLYING, MOB_SCALE, STARTER, THEME, STOPS_XY,
     art, doneSets, stepGoal, stepsOn, dayStatus, mobsForWeek, weekStops, levelOf, rankOf, statsAt, gearOf, equipped, heroOf, baseEvents, battle, bossFor, summary,
-    pityOf, rollRarity, localItem, aiPrompt, parseItem, migrateItem, iconOf, heroLayers, TIERED, artKey, HAIR_MASKED, HAIRS, HAIR_NAME, HAIR_COLORS, lookOf, buildRoute, achText, ACH_COUNT: ACH.length, chestSVG, hashF, seeded };
+    pityOf, rollRarity, localItem, aiPrompt, parseItem, migrateItem, iconOf, heroLayers, TIERED, artKey, HAIR_MASKED, HAIRS, HAIR_NAME, HAIR_COLORS, FACES, FACE_NAME, lookOf, buildRoute, achText, ACH_COUNT: ACH.length, chestSVG, hashF, seeded };
   if (typeof module === "object" && module.exports) { module.exports = Core; return; }
   root.SPQuestCore = Core;
 
@@ -630,6 +634,8 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
         }
       }, extra ? extra(k) : null), text(k))));
       const hairBox = h("div", { class: "q-hairopts" },
+        h("h3", null, "Face"),
+        radios("Face", C.FACES, k => d.look.face === k, k => C.FACE_NAME[k], k => { d.look.face = k; redraw(); }),
         h("h3", null, "Hair"),
         radios("Hairstyle", C.HAIRS, k => d.look.hair === k, k => C.HAIR_NAME[k], k => { d.look.hair = k; redraw(); }),
         radios("Hair colour", Object.keys(C.HAIR_COLORS), k => d.look.hc === k, () => "", k => { d.look.hc = k; redraw(); },

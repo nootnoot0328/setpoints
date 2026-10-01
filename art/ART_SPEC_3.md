@@ -15,17 +15,17 @@ There are 4 slots with 4 shapes each, and each shape gets 4 new tiers. Common is
 | Order | Slot | Images | Shows on |
 |---|---|---|---|
 | 1 | Weapons | 4 sheets | Icon and hero (the held weapon is cut from the icon) |
-| 2 | Helmets | 4 icon sheets + 16 hero edits | Icon and hero |
+| 2 | Helmets | 4 sheets | Icon and hero |
 | 3 | Armour | 4 icon sheets + 16 hero edits | Icon and hero |
 | 4 | Boots | 4 icon sheets + 16 hero edits | Icon and hero |
 
-That's 60 images, plus the 6 in Part 0. Upload in batches: the app uses whatever has arrived and keeps the Common look for the rest. Weapons come first: 4 images, no hero edits.
+That's 44 images, plus Part 0. Upload in batches: the app uses whatever has arrived and keeps the Common look for the rest. Weapons come first: 4 images, no hero edits.
 
 **Secrecy.** You'll see each design while you generate it, so the looks won't be a surprise. What stays hidden is when an item drops, its stats, its skill and its name. The prompts below don't describe the designs, so you aren't reading a list of rewards; ChatGPT designs them inside the tier ladder.
 
 ---
 
-## Part 0 — do these first (6 images)
+## Part 0 — do these first. Done (one heads sheet: `hero-heads-sheet.png`)
 
 These fix the helmets properly and add the face and hair from your reference picture. All are edits, so the app can line them up with the existing hero.
 
@@ -115,40 +115,35 @@ Check it against `eq-weapon.png` side by side. If any tile looks like the old we
 
 ---
 
-## 2. Helmets (4 icon sheets, then 16 hero edits)
+## 2. Helmets (4 sheets)
 
-Same pattern as armour: icons first, then each one worn by the bald hero, so it sits over any hairstyle.
+Same format as the heads sheet that worked for Part 0. Each sheet gives one helmet in all four tiers on the bald head. The app lines the heads up by the eyes, cuts the helmets out against the plain tile, and uses the tiles as icons too, so no separate icon sheets are needed.
 
-**Step 1, icons.** Attach **`eq-helm.png`**.
+Attach **`hero-bald.png`** and **`eq-helm.png`**:
 
 ```
-2x2 sheet of headgear icons, transparent background, each helmet alone and centred in its quarter, front three-quarter view, no head or face.
-Four tiers of [HELM]:
-top-left Uncommon, top-right Rare, bottom-left Epic, bottom-right Legendary.
-[paste TIER RULE]
+Make ONE image: a 3x2 sheet of head portraits, transparent background, no text, no frames, no dividing lines, no glow behind the heads.
+
+Every tile shows the SAME bald head from the first attached character: same pixel-art style, same face and eyes, same three-quarter angle facing right, same size, same position in its tile, cropped just below the chin. Heads must not touch each other or the edges.
+
+top-left: the bald head unchanged, no helmet.
+top-middle: wearing an Uncommon [HELM].
+top-right: wearing a Rare [HELM].
+bottom-left: wearing an Epic [HELM].
+bottom-right: wearing a Legendary [HELM].
+bottom-middle: leave empty.
+
+Base the design on the [HELM] in the second attached sheet. TIER RULE: each tier must be a DIFFERENT helmet with its own silhouette, materials and details, clearly more impressive from Uncommon to Legendary. Do NOT make recolours. Keep the eyes fully visible and the face unchanged in every tile.
 ```
 
 | File | [HELM] |
 |---|---|
-| `eq-helm-kettle-tiers.png` | a kettle helm (brimmed open helmet) |
-| `eq-helm-horned-tiers.png` | a horned helmet |
-| `eq-helm-hood-tiers.png` | a ranger's hood |
-| `eq-helm-circlet-tiers.png` | a circlet or crown-band |
+| `heads-kettle-tiers.png` | kettle helm |
+| `heads-horned-tiers.png` | horned helmet |
+| `heads-hood-tiers.png` | ranger's hood |
+| `heads-circlet-tiers.png` | circlet |
 
-**Step 2, worn.** For each tile, attach **`hero-bald.png`** and the sheet from step 1:
-
-```
-Edit the first attached character. Keep everything identical: same pose, same framing, same position and size in the image, same bald head, same face, same clothes, same sword. Put on the [POSITION] helmet from the second attached sheet, matching its design exactly. Keep the eyes fully visible. Change nothing else. Transparent background.
-```
-
-| Files | [POSITION] |
-|---|---|
-| `hero-helm-<shape>-r1.png` | top-left |
-| `hero-helm-<shape>-r2.png` | top-right |
-| `hero-helm-<shape>-r3.png` | bottom-left |
-| `hero-helm-<shape>-r4.png` | bottom-right |
-
-Check: the face and head haven't moved, and the eyes are visible.
+Check: all heads are the same size, and the eyes sit at the same height in every tile. The Uncommon must not look like the attached Common helmet.
 
 ---
 

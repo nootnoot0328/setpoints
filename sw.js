@@ -1,10 +1,10 @@
 /* Setpoint service worker — makes the app work offline after the first visit.
    Bump VERSION whenever you change any file so phones pick up the update. */
-const VERSION = "setpoint-3.6.0";
+const VERSION = "setpoint-3.7.0";
 // Quest art lives in its own cache that survives app updates. Its name is a
 // fingerprint of assets/quest/ (node tools/art-hash.js); the tests fail if it's stale,
 // so changed art always reaches phones instead of the old copy being served.
-const ART = "setpoint-art-246a9bb6";
+const ART = "setpoint-art-18e94708";
 const SHELL = [
   "./", "index.html", "manifest.webmanifest",
   "css/app.css", "js/engine.js", "js/foods.js", "js/charts.js", "js/exercises.js", "js/train.js", "js/quest.js", "js/sync.js", "js/app.js", "js/exlib-full.js",

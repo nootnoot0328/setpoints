@@ -8,7 +8,7 @@
 # Heads are aligned by eye position, weapons by grip point.
 #
 # Stack, back to front: cape, body, boots, hem, weapon, hand, head|face, blink, tail|hair
-import sys, math, numpy as np
+import sys, os, math, numpy as np
 from PIL import Image
 from scipy import ndimage as nd
 SP = sys.argv[1]; OUT = f"{SP}/doll"
@@ -192,6 +192,64 @@ for hn in ["kettle", "horned", "hood", "circlet"]:
 layers["blink-face"] = blink_for(layers["face"])
 FACE_EYES = eye_cover(layers["face"])[0]
 
+# ---------- heads sheet (art/hero-heads-sheet.png): a 3x2 of the bald head, drawn by
+# ChatGPT in one go: plain | moon face | kettle / horned | hood | circlet. Every tile is
+# moved onto the doll by its eyes. Helmets are what differs from the plain tile; the
+# moon face is the whole tile head. These replace the hand-traced helmets above.
+HEADS = f"{SP}/art/hero-heads-sheet.png"
+if os.path.exists(HEADS):
+    hs = np.array(Image.open(HEADS).convert("RGBA")); HH, HW = hs.shape[:2]
+    names = [["base", "moon", "kettle"], ["horned", "hood", "circlet"]]
+    face_eyes = eyes_of(layers["face"])[1]
+    D = {}
+    for r in range(2):
+        for c in range(3):
+            t = np.zeros_like(hs); y0, y1, x0, x1 = r * HH // 2, (r + 1) * HH // 2, c * HW // 3, (c + 1) * HW // 3
+            t[y0:y1, x0:x1] = hs[y0:y1, x0:x1]
+            ti = t.astype(int)
+            blue = (ti[:, :, 2] > ti[:, :, 0] + 60) & (ti[:, :, 2] > 150) & (ti[:, :, 3] > 200)
+            lab, k = nd.label(blue); sz = nd.sum(blue, lab, range(1, k + 1))
+            cands = [nd.center_of_mass(blue, lab, i + 1)[::-1] for i in range(k) if sz[i] > 150]   # (x, y)
+            # eyes are a pair: side by side, level, a set distance apart. Skull rims, helmet
+            # edges and gems are blue too but never form such a pair.
+            pairs = [(abs(p[1] - q[1]), p, q) for p in cands for q in cands
+                     if 80 <= q[0] - p[0] <= 130 and abs(p[1] - q[1]) < 15]
+            assert pairs, f"no eye pair in heads tile {r},{c}"
+            ey = list(min(pairs)[1:])
+            # place() takes a square canvas: pad the tile into one big enough, then map onto the doll
+            big = np.zeros((max(HH, HW), max(HH, HW), 4), np.uint8); big[:HH, :HW] = t
+            pl = Image.fromarray(big)
+            (a1, a2), (b1, b2) = ey, face_eyes
+            sv = np.subtract(a2, a1); dv = np.subtract(b2, b1)
+            sc = np.hypot(*dv) / np.hypot(*sv); ang = math.atan2(dv[1], dv[0]) - math.atan2(sv[1], sv[0])
+            cc, si = math.cos(ang) * sc, math.sin(ang) * sc
+            M = np.array([[cc, -si], [si, cc]]); tt = np.mean([b1, b2], 0) - M @ np.mean([a1, a2], 0)
+            Mi = np.linalg.inv(M); ti2 = -Mi @ tt
+            D[names[r][c]] = np.array(pl.transform((N, N), Image.AFFINE, (Mi[0, 0], Mi[0, 1], ti2[0], Mi[1, 0], Mi[1, 1], ti2[1]), resample=Image.NEAREST))
+    base_t = D["base"].astype(int)
+    for hn in ["kettle", "horned", "hood", "circlet"]:
+        t = D[hn].astype(int)
+        d = (np.abs(t - base_t)[:, :, :3].sum(2) > 90) & (t[:, :, 3] > 200)
+        d = nd.binary_opening(d, iterations=1)
+        d = blobs(d, 300)
+        d = nd.binary_closing(d, iterations=2)
+        # fill small holes where steel shine matched the bald scalp's shine
+        holes = nd.binary_fill_holes(d) & ~d
+        lab, k = nd.label(holes); sz = nd.sum(holes, lab, range(1, k + 1))
+        d |= np.isin(lab, [i + 1 for i, z in enumerate(sz) if z < 2500])
+        d &= t[:, :, 3] > 200
+        hl = np.zeros_like(D[hn]); hl[d] = D[hn][d]; hl[:, :, 3] = np.where(d, 255, 0)
+        layers["helm-" + hn] = hl
+        if hn in HELM_CUT:      # hair shows only below the helmet's lowest pixel in each column
+            low = np.where(d.any(0), N - 1 - np.argmax(d[::-1], 0), -1)
+            mk = np.zeros((N, N, 4), np.uint8); mk[yy > low[None, :]] = 255
+            layers["hairmask-" + hn] = mk
+    # moon face: the whole tile head, cut at the neck like the plain face
+    mf = D["moon"].copy(); mf[NECK + 14:] = 0; mf[:, :, 3] = np.where(mf[:, :, 3] > 200, 255, 0)
+    mf[~blobs(mf[:, :, 3] > 0, 2000)] = 0
+    layers["face-moon"] = mf
+    layers["blink-face-moon"] = blink_for(mf)
+
 # ---------- weapons from the icon sheet, put in the hand
 wsheet = load("eq-weapon")
 GRIP = (285.0, 529.0)
@@ -300,7 +358,7 @@ for s in ["short", "spiky", "long", "twin", "moon"]:
 BOX = (114, 59, 653, 706)
 ys, xs = np.nonzero(np.max([l[:, :, 3] for l in layers.values()], axis=0) > 0)
 # the old whole heads (with the pale hair) and ponytail are only inputs now
-for n in [k for k in layers if k.startswith("head-") or k == "tail" or (k.startswith("blink-") and k != "blink-face")]:
+for n in [k for k in layers if k.startswith("head-") or k == "tail" or (k.startswith("blink-") and not k.startswith("blink-face"))]:
     del layers[n]
 for n, l in layers.items():
     if n.startswith("hairmask"): continue
