@@ -107,6 +107,38 @@ for n, (qx, qy) in QUAD.items():
     hd[:, :, 3] = np.where(hd[:, :, 3] > 110, 255, 0)
     layers["head-" + n] = hd
 
+# ---------- helmets on their own, so any hairstyle can go underneath.
+# The helm heads have the old pale hair painted in, and steel highlights are the
+# same cream as that hair, so colour can't separate them. Each helmet is cut along
+# a hand-traced line instead: everything above it is helmet, hair may only show
+# below it (the per-helmet hair mask). The circlet is a band drawn over the hair.
+# Points are (x, y) in 768 space; the line is interpolated per column.
+HELM_CUT = {
+    "kettle": [(198, 302), (210, 296), (230, 286), (250, 270), (270, 255), (290, 242), (310, 236), (400, 236), (430, 241),
+               (450, 250), (470, 262), (490, 292), (510, 305), (530, 318), (550, 330), (570, 342), (590, 352), (612, 362)],
+    "horned": [(205, 270), (220, 268), (250, 262), (300, 252), (330, 264), (360, 268), (400, 270), (450, 284), (490, 298),
+               (520, 308), (546, 314), (552, 240), (612, 240)],
+    "hood":   [(198, 430), (212, 430), (216, 340), (226, 305), (240, 276), (260, 246), (280, 226), (300, 213), (330, 206),
+               (360, 206), (400, 211), (440, 250), (470, 272), (490, 302), (510, 346), (526, 382), (540, 378), (612, 376)],
+}
+CIRCLET_BAND = ([(205, 236), (250, 226), (300, 220), (325, 196), (365, 196), (382, 216), (420, 226), (470, 246), (510, 260), (548, 266)],
+                [(205, 262), (250, 252), (300, 247), (325, 266), (365, 268), (382, 248), (420, 257), (470, 274), (510, 290), (548, 302)])
+def line_y(pts):
+    xs = np.arange(N); px, py = zip(*pts)
+    y = np.interp(xs, px, py); y[(xs < px[0]) | (xs > px[-1])] = -1   # no helmet in these columns
+    return y
+yy = np.mgrid[:N, :N][0]
+for hn, pts in HELM_CUT.items():
+    above = yy < line_y(pts)[None, :]
+    hl = np.zeros_like(layers["head-" + hn]); hl[above] = layers["head-" + hn][above]
+    layers["helm-" + hn] = hl
+    mk = np.zeros((N, N, 4), np.uint8); mk[~above] = 255
+    layers["hairmask-" + hn] = mk
+top, bot = (line_y(p)[None, :] for p in CIRCLET_BAND)
+band = (yy >= top) & (yy < bot) & (top >= 0)
+hl = np.zeros_like(layers["head-circlet"]); hl[band] = layers["head-circlet"][band]; layers["helm-circlet"] = hl
+for hn in list(HELM_CUT) + ["circlet"]: layers["helm-" + hn][:, :, 3] = np.where(layers["helm-" + hn][:, :, 3] > 110, 255, 0)
+
 # ---------- blinks, one per head. Lashes come from the closed-eye frame of the reference
 # idle GIF (art/hero-idle.gif: 12 frames, blink on frame 7, upper body 6px lower on 4-9).
 # Each head's own eyes are found, painted over with its skin, and the lashes placed on them.
@@ -187,8 +219,10 @@ HAIR_COLORS = {                       # dark, mid, light
     "ash": ((150, 128, 128), (214, 198, 194), (246, 234, 226)),
     "auburn": ((104, 32, 26), (170, 60, 40), (222, 112, 76)),
     "teal": ((28, 78, 92), (44, 142, 146), (118, 212, 196)),
+    # icy blue at the roots fading to lavender at the tips (two ramps, blended down the hair)
+    "frost": (((92, 120, 176), (178, 212, 240), (238, 248, 255)), ((118, 92, 176), (196, 164, 232), (242, 226, 255))),
 }
-def recolour(px, ramp):
+def recolour(px, ramp, fade=None):
     rgb = px[:, :3].astype(float); lum = rgb @ [0.3, 0.59, 0.11]
     mx = rgb.max(1); mn = rgb.min(1); sat = (mx - mn) / np.maximum(mx, 1)
     hue = np.degrees(np.arctan2(np.sqrt(3) * (rgb[:, 1] - rgb[:, 2]), 2 * rgb[:, 0] - rgb[:, 1] - rgb[:, 2])) % 360
@@ -196,8 +230,11 @@ def recolour(px, ramp):
     ribbon = (rgb[:, 0] > 140) & (rgb[:, 1] < 80) & (sat > 0.55)
     is_hair = (lum > 30) & ((hue < 60) | (hue > 330)) & (sat > 0.15) & ~skin & ~ribbon   # leaves outlines, ribbons, skin
     lo, hi = np.percentile(lum[is_hair], [3, 97]); t = np.clip((lum - lo) / (hi - lo), 0, 1)
-    r = np.array(ramp, float)
-    col = np.where(t[:, None] < 0.5, r[0] + (r[1] - r[0]) * (t[:, None] * 2), r[1] + (r[2] - r[1]) * (t[:, None] * 2 - 1))
+    def ramp_col(r):
+        r = np.array(r, float)
+        return np.where(t[:, None] < 0.5, r[0] + (r[1] - r[0]) * (t[:, None] * 2), r[1] + (r[2] - r[1]) * (t[:, None] * 2 - 1))
+    if fade is None: col = ramp_col(ramp)
+    else: col = ramp_col(ramp[0]) * (1 - fade[:, None]) + ramp_col(ramp[1]) * fade[:, None]
     out = px.copy(); out[is_hair, :3] = np.clip(col[is_hair], 0, 255).astype(np.uint8)
     return out
 for s in ["short", "spiky", "long", "twin"]:
@@ -213,13 +250,21 @@ for s in ["short", "spiky", "long", "twin"]:
     hair = np.zeros_like(a); hair[m] = a[m]
     for c, ramp in HAIR_COLORS.items():
         hh = hair.copy()
-        if ramp: hh[m] = recolour(hair[m], ramp)
+        if ramp and c == "frost":
+            ys = np.nonzero(m)[0]; y0, y1 = ys.min(), ys.max()
+            fade = np.clip(((ys - y0) / max(1, y1 - y0) - 0.35) / 0.6, 0, 1)   # tips, not roots, go lavender
+            hh[m] = recolour(hair[m], ramp, fade)
+        elif ramp: hh[m] = recolour(hair[m], ramp)
         layers[f"hair-{s}-{c}"] = hh
 
 # ---------- one crop box for every layer so they stack exactly
 BOX = (114, 59, 653, 706)
 ys, xs = np.nonzero(np.max([l[:, :, 3] for l in layers.values()], axis=0) > 0)
+# the old whole heads (with the pale hair) and ponytail are only inputs now
+for n in [k for k in layers if k.startswith("head-") or k == "tail" or (k.startswith("blink-") and k != "blink-face")]:
+    del layers[n]
 for n, l in layers.items():
+    if n.startswith("hairmask"): continue
     ys, xs = np.nonzero(l[:, :, 3] > 0)
     if len(xs) and (xs.min() < BOX[0] or ys.min() < BOX[1] or xs.max() >= BOX[2] or ys.max() >= BOX[3]):
         out = ((xs < BOX[0]) | (ys < BOX[1]) | (xs >= BOX[2]) | (ys >= BOX[3])).sum()
@@ -241,6 +286,19 @@ def grid(rows, path):
     P.save(path)
 outfits = ["body", "body-leather", "body-chain", "body-plate", "body-robe"]
 boots = ["boots", "boots-leather", "boots-greaves", "boots-winged", "boots-wraps"]
-grid([[([] if o == "body-robe" else ["cape"]) + [o, b] + (["hem-robe"] if o == "body-robe" else []) + ["wpn-sword", "hand", "head-kettle", "tail"] for b in boots] for o in outfits], f"{OUT}/prev-gear.png")
-grid([[["cape", "body", "boots", "wpn-sword", "hand", hd] + ([f"blink-{hd[5:]}", "tail"] if hd != "face" else ["blink-face", hr]) for hd, hr in [("head-kettle", 0), ("head-horned", 0), ("head-hood", 0), ("head-circlet", 0), ("face", "hair-short-brown"), ("face", "hair-long-black"), ("face", "hair-twin-blonde")]]], f"{OUT}/prev-blink.png")
+def stack_m(names, mask=None):
+    c = Image.new("RGBA", (tw, th), (0, 0, 0, 0))
+    for f in names:
+        im = Image.open(f"{OUT}/hero-{f}.webp").convert("RGBA")
+        if mask and f.startswith("hair-"):
+            m = Image.open(f"{OUT}/hero-{mask}.webp").convert("RGBA").getchannel("A")
+            im.putalpha(Image.fromarray(np.minimum(np.array(im.getchannel("A")), np.array(m))))
+        c.alpha_composite(im)
+    return c
+P = Image.new("RGBA", (tw * 5, th * 4), (60, 62, 78, 255))
+for i, hs in enumerate(["short-brown", "spiky-black", "long-ash", "twin-blonde"]):
+    for j, hn in enumerate(["kettle", "horned", "hood", "circlet", None]):
+        names = ["cape", "body", "boots", "wpn-sword", "hand", "face", "blink-face", "hair-" + hs] + ([f"helm-{hn}"] if hn else [])
+        P.alpha_composite(stack_m(names, f"hairmask-{hn}" if hn in HELM_CUT else None), (j * tw, i * th))
+P.save(f"{OUT}/prev-helmhair.png")
 grid([[["cape", "body", "boots", "wpn-sword", "hand", "face", f"hair-{s}-{c}"] for c in HAIR_COLORS] for s in ["short", "spiky", "long", "twin"]], f"{OUT}/prev-hair.png")

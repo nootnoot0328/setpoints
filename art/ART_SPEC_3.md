@@ -15,13 +15,50 @@ There are 4 slots with 4 shapes each, and each shape gets 4 new tiers. Common is
 | Order | Slot | Images | Shows on |
 |---|---|---|---|
 | 1 | Weapons | 4 sheets | Icon and hero (the held weapon is cut from the icon) |
-| 2 | Helmets | 4 sheets | Icon and hero (each head is cut from the sheet) |
+| 2 | Helmets | 4 icon sheets + 16 hero edits | Icon and hero |
 | 3 | Armour | 4 icon sheets + 16 hero edits | Icon and hero |
 | 4 | Boots | 4 icon sheets + 16 hero edits | Icon and hero |
 
-That's 48 images. Upload in batches: the app uses whatever has arrived and keeps the Common look for the rest. Weapons and helmets come first because they're 8 images for most of the visible change.
+That's 60 images, plus the 6 in Part 0. Upload in batches: the app uses whatever has arrived and keeps the Common look for the rest. Weapons come first: 4 images, no hero edits.
 
 **Secrecy.** You'll see each design while you generate it, so the looks won't be a surprise. What stays hidden is when an item drops, its stats, its skill and its name. The prompts below don't describe the designs, so you aren't reading a list of rewards; ChatGPT designs them inside the tier ladder.
+
+---
+
+## Part 0 — do these first (6 images)
+
+These fix the helmets properly and add the face and hair from your reference picture. All are edits, so the app can line them up with the existing hero.
+
+**Helmets on the bald hero (4).** The app currently cuts helmets out of the old heads along hand-traced lines. It works, but the hood can't wrap the hair properly. These give clean helmets that sit over any hairstyle.
+
+Attach **`hero-bald.png`** and **`eq-helm.png`**:
+
+```
+Edit the first attached character. Keep everything identical: same pose, same framing, same position and size in the image, same bald head, same face, same clothes, same sword. Put on the [HELM] from the second attached sheet, matching its design, sitting on the bald head. Change nothing else. Transparent background.
+```
+
+| File | [HELM] |
+|---|---|
+| `hero-helm-kettle.png` | kettle helm (top-left of the sheet) |
+| `hero-helm-horned.png` | horned helmet (top-right) |
+| `hero-helm-hood.png` | green ranger hood (bottom-left) |
+| `hero-helm-circlet.png` | silver circlet (bottom-right) |
+
+**The hairstyle from your reference (1).** Attach **`hero-mid.png`** and your reference picture:
+
+```
+Edit the first attached character. Keep everything identical: same pose, same framing, same position and size in the image, same face, same clothes, same sword. Remove the helmet and give the character the hairstyle from the second attached picture: long straight hair to the waist with blunt straight-cut bangs, a small bun on one side, and a crescent-moon flower hair clip on the bun. Hair colour: medium brown (the app recolours it). Keep the hair clip its own colours. Match the first picture's pixel-art style, not the second's. Transparent background.
+```
+
+Save as `hero-hair-moon.png`. In the app, pick the **Frost** colour to get the icy blue fading to lavender from your reference.
+
+**The face from your reference (1).** Attach **`hero-bald.png`** and your reference picture:
+
+```
+Edit the first attached character. Keep everything identical: same pose, same framing, same position and size in the image, same bald head shape, same ears, same clothes, same sword. Change ONLY the face to match the second attached picture: big round sparkling blue eyes with large white highlights, soft pink blush on the cheeks, and a small cat-like "w" mouth. Keep the eyes in the same place and at the same height as the original face. Match the first picture's pixel-art style. Transparent background.
+```
+
+Save as `hero-face-moon.png`. The blink is made from it automatically.
 
 ---
 
@@ -66,15 +103,16 @@ Check: the handle is at the bottom-left on every tile, the blade or head points 
 
 ---
 
-## 2. Helmets (4 sheets)
+## 2. Helmets (4 icon sheets, then 16 hero edits)
 
-Attach **`eq-helm.png`** (batch 1, the sheet with the hero's head wearing each helm). The app lines each head up by the eyes, so it must be the same face.
+Same pattern as armour: icons first, then each one worn by the bald hero, so it sits over any hairstyle.
+
+**Step 1, icons.** Attach **`eq-helm.png`**.
 
 ```
-2x2 sheet, transparent background. Each quarter shows the SAME chibi head as the attached sheet (same face, same eyes, same pale hair, same angle and size) wearing a different helmet, cropped at the neck like the attached sheet.
+2x2 sheet of headgear icons, transparent background, each helmet alone and centred in its quarter, front three-quarter view, no head or face.
 Four tiers of [HELM]:
 top-left Uncommon, top-right Rare, bottom-left Epic, bottom-right Legendary.
-Keep the eyes fully visible on every tile.
 [paste TIER RULE]
 ```
 
@@ -85,7 +123,20 @@ Keep the eyes fully visible on every tile.
 | `eq-helm-hood-tiers.png` | a ranger's hood |
 | `eq-helm-circlet-tiers.png` | a circlet or crown-band |
 
-Check: the face is identical to the attached one on all four tiles, and nothing covers the eyes. The blink and head placement depend on both.
+**Step 2, worn.** For each tile, attach **`hero-bald.png`** and the sheet from step 1:
+
+```
+Edit the first attached character. Keep everything identical: same pose, same framing, same position and size in the image, same bald head, same face, same clothes, same sword. Put on the [POSITION] helmet from the second attached sheet, matching its design exactly. Keep the eyes fully visible. Change nothing else. Transparent background.
+```
+
+| Files | [POSITION] |
+|---|---|
+| `hero-helm-<shape>-r1.png` | top-left |
+| `hero-helm-<shape>-r2.png` | top-right |
+| `hero-helm-<shape>-r3.png` | bottom-left |
+| `hero-helm-<shape>-r4.png` | bottom-right |
+
+Check: the face and head haven't moved, and the eyes are visible.
 
 ---
 

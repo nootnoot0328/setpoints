@@ -55,10 +55,10 @@
   const ICON_PRE = { weapon: "w-", helm: "h-", armor: "a-", boots: "b-" };
   const RANKS = ["Novice", "Squire", "Adventurer", "Knight", "Champion", "Hero", "Legend", "Mythic", "Ascendant"];
   const CLASSES = {
-    sword: { en: "Warrior", atk: 1.15, hp: 1.0, note: "Hits 15% harder. Every fifth set strikes twice." },
-    body: { en: "Guardian", atk: 1.0, hp: 1.3, note: "30% more HP. Sets with 0–1 reps left hit 20% harder." },
-    spell: { en: "Mage", atk: 1.0, hp: 1.0, note: "Interval rounds hit 50% harder. Weigh-in days hit 10% harder." },
-    alch: { en: "Cleric", atk: 1.0, hp: 1.1, note: "Food days heal twice as much, and a day on target powers up your next session." }
+    sword: { en: "Warrior", atk: 1.15, hp: 1.0, note: "Hits 15% harder. Every fifth set strikes twice.", outfit: "chain" },
+    body: { en: "Guardian", atk: 1.0, hp: 1.3, note: "30% more HP. Sets with 0–1 reps left hit 20% harder.", outfit: "plate" },
+    spell: { en: "Mage", atk: 1.0, hp: 1.0, note: "Interval rounds hit 50% harder. Weigh-in days hit 10% harder.", outfit: "robe" },
+    alch: { en: "Cleric", atk: 1.0, hp: 1.1, note: "Food days heal twice as much, and a day on target powers up your next session.", outfit: null }
   };
   const MOBS = { slime: "Moss Slime", mushroom: "Capshroom", boar: "Bristleback Boar", bat: "Dusk Bat",
     goblin: "Goblin Scout", wolf: "Grey Wolf", skeleton: "Rattlebones", wisp: "Will-o'-wisp" };
@@ -142,7 +142,7 @@
   /* Cosmetic look: hairstyle and colour show when the helmet is hidden. Stats never change. */
   const HAIRS = ["short", "spiky", "long", "twin"];
   const HAIR_NAME = { short: "Short", spiky: "Spiky", long: "Long", twin: "Twin tails" };
-  const HAIR_COLORS = { brown: "#8a5a3a", black: "#34313f", blonde: "#deac4e", ash: "#d6cec8", auburn: "#aa3c28", teal: "#2c8e92" };
+  const HAIR_COLORS = { brown: "#8a5a3a", black: "#34313f", blonde: "#deac4e", ash: "#d6cec8", auburn: "#aa3c28", teal: "#2c8e92", frost: "linear-gradient(160deg,#cfe6fa 35%,#c4a6ea)" };
   function lookOf(l) {
     l = l || {};
     return { hair: HAIRS.includes(l.hair) ? l.hair : "short", hc: HAIR_COLORS[l.hc] ? l.hc : "brown", helm: l.helm !== false };
@@ -459,18 +459,25 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
   /* Paper-doll layers, back to front, as {k, src}. k "w" is the weapon (poses rotate it),
      "ft" the boots (stay planted while the rest breathes), "bl" the blink.
      Empty armour/boots show the starting tunic and boots. */
-  function heroLayers(eq, look) {
+  // helmets that hide hair above their brim (a circlet sits on top of the hair)
+  const HAIR_MASKED = new Set(["kettle", "horned", "hood"]);
+  function heroLayers(eq, look, cls) {
     eq = eq || {}; look = lookOf(look);
     const key = s => eq[s] ? artKey(s, eq[s]) : null;
-    const w = key("weapon") || "sword", hd = key("helm") || "kettle", ar = key("armor"), bt = key("boots");
-    const robe = !!eq.armor && SHAPES.armor[eq.armor.shape] === "robe";
+    // no armour equipped: you wear your class's outfit (Cleric keeps the white tunic)
+    const classFit = (CLASSES[cls] || CLASSES.sword).outfit;
+    const w = key("weapon") || "sword", hd = key("helm") || "kettle", bt = key("boots");
+    const ar = key("armor") || classFit;
+    const robe = eq.armor ? SHAPES.armor[eq.armor.shape] === "robe" : classFit === "robe";
     const L = robe ? [] : [["cape", "hero-cape"]];   // robes have no cape
     L.push(["b", "hero-body" + (ar ? "-" + ar : "")], ["ft", "hero-boots" + (bt ? "-" + bt : "")]);
     if (robe) L.push(["hem", "hero-hem-" + ar]);
-    L.push(["w", "hero-wpn-" + w], ["hn", "hero-hand"]);
-    if (look.helm) L.push(["hd", "hero-head-" + hd], ["bl", "hero-blink-" + hd], ["tl", "hero-tail"]);
-    else L.push(["hd", "hero-face"], ["bl", "hero-blink-face"], ["hr", `hero-hair-${look.hair}-${look.hc}`]);
-    return L.map(([k, f]) => ({ k, src: art(f) }));
+    L.push(["w", "hero-wpn-" + w], ["hn", "hero-hand"], ["hd", "hero-face"], ["bl", "hero-blink-face"]);
+    const hairL = ["hr", `hero-hair-${look.hair}-${look.hc}`];
+    if (look.helm && HAIR_MASKED.has(hd.split("-")[0])) hairL.push("hero-hairmask-" + hd);
+    L.push(hairL);
+    if (look.helm) L.push(["hm", "hero-helm-" + hd]);
+    return L.map(([k, f, m]) => m ? { k, src: art(f), mask: art(m) } : { k, src: art(f) });
   }
 
   /* ================================================================ route
@@ -522,7 +529,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
 
   const Core = { RAR, RCOL, ODDS, PITY_RARE, PITY_LEG, CHEST_COST, RALLY, SLOTS, SLOT_NAME, SHAPES, NOUN, SKILLS, CLASSES, RANKS, MOBS, FLYING, MOB_SCALE, STARTER, THEME, STOPS_XY,
     art, doneSets, stepGoal, stepsOn, dayStatus, mobsForWeek, weekStops, levelOf, rankOf, statsAt, gearOf, equipped, heroOf, baseEvents, battle, bossFor, summary,
-    pityOf, rollRarity, localItem, aiPrompt, parseItem, migrateItem, iconOf, heroLayers, TIERED, artKey, HAIRS, HAIR_NAME, HAIR_COLORS, lookOf, buildRoute, achText, ACH_COUNT: ACH.length, chestSVG, hashF, seeded };
+    pityOf, rollRarity, localItem, aiPrompt, parseItem, migrateItem, iconOf, heroLayers, TIERED, artKey, HAIR_MASKED, HAIRS, HAIR_NAME, HAIR_COLORS, lookOf, buildRoute, achText, ACH_COUNT: ACH.length, chestSVG, hashF, seeded };
   if (typeof module === "object" && module.exports) { module.exports = Core; return; }
   root.SPQuestCore = Core;
 
@@ -586,13 +593,16 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
     /* ---------------------------------------------------- the hero (paper doll) */
     // Weapon angles for poses, measured from how each weapon sits in the hand
     const POSE_ANGLE = { sword: { up: 72, rest: -63 }, axe: { up: -22, rest: 0 }, bow: { up: 125, rest: 0 }, staff: { up: -11, rest: 0 } };
-    function doll(eq, cls, look) {
+    function doll(eq, cls, look, heroCls) {
       const wk = eq && eq.weapon ? C.SHAPES.weapon[eq.weapon.shape] : "sword", a = POSE_ANGLE[wk];
       // consecutive layers that breathe share one wrapper; the boots sit in a still one
       const groups = [];
-      C.heroLayers(eq, look || C.heroOf(S()).look).forEach((l, i) => {
+      const me = C.heroOf(S());
+      C.heroLayers(eq, look || me.look, heroCls || me.cls).forEach((l, i) => {
         const still = l.k === "ft", last = groups[groups.length - 1];
-        const img = h("img", { class: l.k, src: l.src, alt: i === 0 ? "Your hero" : "", draggable: "false" });
+        const mk = l.mask ? `url("${l.mask}")` : null;
+        const img = h("img", { class: l.k, src: l.src, alt: i === 0 ? "Your hero" : "", draggable: "false",
+          style: mk ? { WebkitMaskImage: mk, maskImage: mk, WebkitMaskSize: "100% 100%", maskSize: "100% 100%" } : null });
         if (last && last.still === still) last.el.append(img);
         else groups.push({ still, el: h("div", { class: still ? "q-st" : "q-up" }, img) });
       });
@@ -607,8 +617,8 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
       const root = h("div", { class: "quest force-anim" });
       root.append(existing ? X.subhead("Your hero") : X.head("Quest"));
       const note = h("p", { class: "note" }, C.CLASSES[d.cls].note);
-      const stage = h("div", { class: "q-setupstage", style: { backgroundImage: `url("${C.art("bg-forest")}")` } }, doll(C.equipped(S()), "idle", d.look));
-      const redraw = () => stage.replaceChildren(doll(C.equipped(S()), "idle", d.look));
+      const stage = h("div", { class: "q-setupstage", style: { backgroundImage: `url("${C.art("bg-forest")}")` } }, doll(C.equipped(S()), "idle", d.look, d.cls));
+      const redraw = () => stage.replaceChildren(doll(C.equipped(S()), "idle", d.look, d.cls));
       // one radio group of chips; pick(k) runs on select
       const radios = (label, keys, isOn, text, pick, extra) => h("div", { class: "q-chips", role: "radiogroup", "aria-label": label }, keys.map(k => h("button", Object.assign({
         class: "chip" + (isOn(k) ? " on" : ""), role: "radio", "aria-checked": isOn(k) ? "true" : "false",
@@ -617,7 +627,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
           e.currentTarget.classList.add("on"); e.currentTarget.setAttribute("aria-checked", "true"); pick(k);
         }
       }, extra ? extra(k) : null), text(k))));
-      const hairBox = h("div", { class: "q-hairopts" + (d.look.helm ? " off" : "") },
+      const hairBox = h("div", { class: "q-hairopts" },
         h("h3", null, "Hair"),
         radios("Hairstyle", C.HAIRS, k => d.look.hair === k, k => C.HAIR_NAME[k], k => { d.look.hair = k; redraw(); }),
         radios("Hair colour", Object.keys(C.HAIR_COLORS), k => d.look.hc === k, () => "", k => { d.look.hc = k; redraw(); },
@@ -629,14 +639,14 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
         h("div", { class: "q-chips", role: "radiogroup", "aria-label": "Class" }, Object.keys(C.CLASSES).map(k => h("button", {
           class: "chip" + (d.cls === k ? " on" : ""), role: "radio", "aria-checked": d.cls === k ? "true" : "false",
           onclick: e => {
-            d.cls = k;
+            d.cls = k; redraw();
             e.currentTarget.parentNode.querySelectorAll("button").forEach(b => { b.classList.remove("on"); b.setAttribute("aria-checked", "false"); });
             e.currentTarget.classList.add("on"); e.currentTarget.setAttribute("aria-checked", "true"); note.textContent = C.CLASSES[k].note;
           }
         }, C.CLASSES[k].en))), note,
         h("h3", null, "Look"),
         h("label", { class: "tgl" },
-          h("input", { type: "checkbox", checked: d.look.helm ? true : null, onchange: e => { d.look.helm = e.target.checked; hairBox.classList.toggle("off", d.look.helm); redraw(); } }),
+          h("input", { type: "checkbox", checked: d.look.helm ? true : null, onchange: e => { d.look.helm = e.target.checked; redraw(); } }),
           h("span", null, h("b", null, "Show helmet"), h("span", null, "Looks only. Your helm's stats count either way."))),
         hairBox,
         h("h3", null, "Name"),

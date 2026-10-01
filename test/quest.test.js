@@ -226,23 +226,37 @@ test("every art file the game can ask for exists", () => {
   const files = new Set();
   for (const slot of Q.SLOTS) for (let sh = 0; sh < 4; sh++) {
     files.add(Q.iconOf({ slot, shape: sh }));
-    Q.heroLayers({ [slot]: { slot, shape: sh } }).forEach(l => files.add(l.src));
+    for (const cls of Object.keys(Q.CLASSES))
+      Q.heroLayers({ [slot]: { slot, shape: sh } }, null, cls).forEach(l => { files.add(l.src); if (l.mask) files.add(l.mask); });
   }
-  for (const hair of Q.HAIRS) for (const hc of Object.keys(Q.HAIR_COLORS))
-    Q.heroLayers({}, { hair, hc, helm: false }).forEach(l => files.add(l.src));
+  for (const hair of Q.HAIRS) for (const hc of Object.keys(Q.HAIR_COLORS)) for (const helm of [true, false])
+    Q.heroLayers({}, { hair, hc, helm }).forEach(l => { files.add(l.src); if (l.mask) files.add(l.mask); });
   Object.keys(Q.MOBS).forEach(m => files.add(Q.art(m)));
   ["bg-forest", "platform", "platform-boss", "flag", "signpost"].forEach(k => files.add(Q.art(k)));
   for (let w = 0; w < 20; w++) files.add(Q.art(Q.bossFor(E.addDays("2026-01-05", w * 7), 1, 3).art));
   for (const f of files) assert.ok(fs.existsSync(path.join(__dirname, "..", f)), "missing " + f);
 });
 
-test("hero look: helmet hides hair, armour and boots change the doll, bad input falls back", () => {
+test("hero look: hair shows under any helmet, class sets the outfit, armour and boots override", () => {
   const keys = ls => ls.map(l => l.src.split("/").pop());
-  const plain = keys(Q.heroLayers({}));
-  assert.deepStrictEqual(plain, ["hero-cape.webp", "hero-body.webp", "hero-boots.webp", "hero-wpn-sword.webp", "hero-hand.webp", "hero-head-kettle.webp", "hero-blink-kettle.webp", "hero-tail.webp"]);
-  const robe = keys(Q.heroLayers({ armor: { slot: "armor", shape: 3 }, boots: { slot: "boots", shape: 2 } }, { helm: false, hair: "twin", hc: "teal" }));
-  assert.deepStrictEqual(robe, ["hero-body-robe.webp", "hero-boots-winged.webp", "hero-hem-robe.webp", "hero-wpn-sword.webp", "hero-hand.webp", "hero-face.webp", "hero-blink-face.webp", "hero-hair-twin-teal.webp"]);
-  assert.strictEqual(Q.heroLayers({}).find(l => l.k === "w").src.endsWith("hero-wpn-sword.webp"), true);
+  // Warrior, nothing but starter gear: chainmail, the helmet over the hair, hair masked under the brim
+  const plain = Q.heroLayers({}, null, "sword");
+  assert.deepStrictEqual(keys(plain), ["hero-cape.webp", "hero-body-chain.webp", "hero-boots.webp", "hero-wpn-sword.webp", "hero-hand.webp",
+    "hero-face.webp", "hero-blink-face.webp", "hero-hair-short-brown.webp", "hero-helm-kettle.webp"]);
+  assert.ok(plain.find(l => l.k === "hr").mask.endsWith("hero-hairmask-kettle.webp"));
+  // circlet sits on the hair: no mask
+  assert.ok(!Q.heroLayers({ helm: { slot: "helm", shape: 3 } }, null, "sword").find(l => l.k === "hr").mask);
+  // class outfits
+  assert.ok(keys(Q.heroLayers({}, null, "body")).includes("hero-body-plate.webp"));
+  assert.ok(keys(Q.heroLayers({}, null, "alch")).includes("hero-body.webp"));
+  const mage = keys(Q.heroLayers({}, null, "spell"));
+  assert.ok(mage.includes("hero-body-robe.webp") && mage.includes("hero-hem-robe.webp") && !mage.includes("hero-cape.webp"));
+  // equipped armour beats the class outfit; helmet hidden drops the helm and the mask
+  const robe = Q.heroLayers({ armor: { slot: "armor", shape: 3 }, boots: { slot: "boots", shape: 2 } }, { helm: false, hair: "twin", hc: "teal" }, "body");
+  assert.deepStrictEqual(keys(robe), ["hero-body-robe.webp", "hero-boots-winged.webp", "hero-hem-robe.webp", "hero-wpn-sword.webp", "hero-hand.webp",
+    "hero-face.webp", "hero-blink-face.webp", "hero-hair-twin-teal.webp"]);
+  assert.ok(!robe.some(l => l.mask));
+  assert.deepStrictEqual(keys(Q.heroLayers({ armor: { slot: "armor", shape: 0 } }, null, "spell")).slice(0, 2), ["hero-cape.webp", "hero-body-leather.webp"]);
   assert.deepStrictEqual(Q.lookOf({ hair: "mohawk", hc: "pink", helm: 0 }), { hair: "short", hc: "brown", helm: true });
   const S = { game: { hero: { cls: "spell", name: "Stan", look: { hair: "long", hc: "ash", helm: false } } } };
   assert.deepStrictEqual(Q.heroOf(S).look, { hair: "long", hc: "ash", helm: false });
@@ -264,13 +278,20 @@ test("rarity picks its own drawing once it ships, never a tint", () => {
 });
 
 test("every shipped tier drawing exists, with its doll layers", () => {
-  const PRE = { weapon: ["w-", "hero-wpn-"], helm: ["h-", "hero-head-", "hero-blink-"], armor: ["a-", "hero-body-"], boots: ["b-", "hero-boots-"] };
+  const PRE = { weapon: ["w-", "hero-wpn-"], helm: ["h-", "hero-helm-"], armor: ["a-", "hero-body-"], boots: ["b-", "hero-boots-"] };
   for (const t of Q.TIERED) {
     const [slot, shape, r] = t.split(":");
     const files = PRE[slot].map(p => `${p}${shape}-r${r}`);
     if (shape === "robe") files.push(`hero-hem-robe-r${r}`);
+    if (slot === "helm" && Q.HAIR_MASKED.has(shape)) files.push(`hero-hairmask-${shape}-r${r}`);
     for (const f of files) assert.ok(fs.existsSync(path.join(__dirname, "..", Q.art(f))), "missing " + f);
   }
+});
+
+test("the service worker's art cache is named after the current art", () => {
+  const { artHash } = require("../tools/art-hash.js");
+  const sw = fs.readFileSync(path.join(__dirname, "..", "sw.js"), "utf8");
+  assert.ok(sw.includes(`"setpoint-art-${artHash()}"`), "art changed: set ART in sw.js to setpoint-art-" + artHash());
 });
 
 test("the route passes through every stop in order", () => {
