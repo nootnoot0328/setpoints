@@ -1,6 +1,9 @@
 /* Setpoint service worker — makes the app work offline after the first visit.
    Bump VERSION whenever you change any file so phones pick up the update. */
-const VERSION = "setpoint-2.11.0";
+const VERSION = "setpoint-3.0.0";
+// Quest art lives in its own cache that survives app updates. Bump ART only
+// when files in assets/quest/ change.
+const ART = "setpoint-art-1";
 const SHELL = [
   "./", "index.html", "manifest.webmanifest",
   "css/app.css", "js/engine.js", "js/foods.js", "js/charts.js", "js/exercises.js", "js/train.js", "js/quest.js", "js/sync.js", "js/app.js", "js/exlib-full.js",
@@ -16,7 +19,7 @@ self.addEventListener("install", e => {
 self.addEventListener("activate", e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== ART).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -38,6 +41,18 @@ self.addEventListener("fetch", e => {
       if (hit) return hit;
       const res = await fetch(req);
       if (res.ok || res.type === "opaque") c.put(req, res.clone());
+      return res;
+    }));
+    return;
+  }
+
+  // Quest art: cache-first in the long-lived art cache, so updates don't re-download it
+  if (url.origin === self.location.origin && url.pathname.includes("/assets/quest/")) {
+    e.respondWith(caches.open(ART).then(async c => {
+      const hit = await c.match(req, { ignoreSearch: true });
+      if (hit) return hit;
+      const res = await fetch(req);
+      if (res.ok) c.put(req, res.clone());
       return res;
     }));
     return;

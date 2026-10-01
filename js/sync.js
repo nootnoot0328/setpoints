@@ -32,7 +32,7 @@
     trainProfile: S => S.train ? S.train.profile : undefined,
     trainPlan: S => S.train ? S.train.plan : undefined,
     trainActive: S => S.train ? S.train.active : undefined,
-    game: S => S.game ? { start: S.game.start || null, hero: S.game.hero || null, eq: S.game.eq || {}, ach: S.game.ach || {}, fights: S.game.fights || {} } : undefined
+    game: S => S.game ? { start: S.game.start || null, hero: S.game.hero || null, eq: S.game.eq || {}, ach: S.game.ach || {}, fights: S.game.fights || {}, stepGoal: S.game.stepGoal || null } : undefined
   };
   const TOMB_DAYS = 120;
 
@@ -145,7 +145,7 @@
       }
       if (r.steps != null || r.activeKcal != null) {
         const h = S.health[d] || {};
-        if (r.steps != null) h.steps = Math.max(h.steps || 0, r.steps);
+        if (r.steps != null && r.steps >= (h.steps || 0)) { h.steps = r.steps; h.stepsAt = r.at || h.stepsAt || null; }
         if (r.activeKcal != null) h.active = Math.max(h.active || 0, r.activeKcal);
         S.health[d] = h; n++;
       }

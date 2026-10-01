@@ -227,6 +227,7 @@
       const total = rows.reduce((s, r) => s + r.kcal, 0);
       const logged = rnd() > 0.07;
       if (logged) S.intake[d] = rows;
+      S.health[d] = { steps: Math.round(5200 + rnd() * 6400) };
       if (rnd() > 0.1) {
         const noise = (rnd() + rnd() + rnd() - 1.5) * 0.6;
         S.weights[d] = { kg: r1(w + noise), bf: i % 5 === 1 ? r1(32.6 - i * 0.03 + (rnd() - 0.5)) : null, mm: null };
@@ -2431,6 +2432,7 @@
       step(6, "Send it", h("span", null, "Add ", h("em", null, "Get Contents of URL"), ":", h("br"), "URL: ", h("code", null, url), h("br"), "Method: POST", h("br"),
         "Headers: ", h("code", null, "Authorization"), " = ", h("code", null, "Bearer " + (SC.inboxKey || "YOUR-INBOX-KEY")), h("br"),
         "Request Body: JSON with fields ", h("code", null, "date"), " = Day, ", h("code", null, "weight"), " = Weight, ", h("code", null, "bodyFat"), " = BodyFat, ", h("code", null, "steps"), " = Steps.")),
+      step("6b", "Yesterday's full step total (for Quest)", h("span", null, "Your morning run only sees a few of today's steps, so send yesterday's total too. Add ", h("em", null, "Find Health Samples"), ": Type = Steps, Start Date is yesterday → ", h("em", null, "Calculate Statistics"), " → Sum, rename it “StepsYesterday”. Add ", h("em", null, "Adjust Date"), ": Current Date, subtract 1 day → ", h("em", null, "Format Date"), " ", h("code", null, "yyyy-MM-dd"), ", rename it “Yesterday”. Then a second ", h("em", null, "Get Contents of URL"), " like step 6, with fields ", h("code", null, "date"), " = Yesterday and ", h("code", null, "steps"), " = StepsYesterday.")),
       step(7, "Test it", h("span", null, "Tap ▶. You should see ", h("code", null, "{\"ok\":true,…}"), ". Open Setpoint and the weigh-in appears after it syncs.")),
       step(8, "Automate it", h("span", null, "Automation tab → + → App → Zepp Life → ", h("em", null, "Is Closed"), " → Run Immediately → pick “Setpoint Health”."))));
     root.append(h("p", { class: "note" }, "The inbox key can only add readings. If it ever leaks, the worst anyone can do is add a fake weigh-in, which you can delete. Units are handled: pounds are converted, and body fat as 0.32 or 32% both work."));
