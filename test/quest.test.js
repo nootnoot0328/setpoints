@@ -288,7 +288,7 @@ test("every shipped tier drawing exists, with its doll layers", () => {
     const [slot, shape, r] = t.split(":");
     const files = PRE[slot].map(p => `${p}${shape}-r${r}`);
     if (shape === "robe") files.push(`hero-hem-robe-r${r}`);
-    if (slot === "helm" && Q.HAIR_MASKED.has(shape)) files.push(`hero-hairmask-${shape}-r${r}`);
+    if (slot === "helm" && Q.HAIR_MASKED.has(shape)) files.push(`hero-hairmask-${shape}-r${r}`, `hero-facemask-${shape}-r${r}`);
     for (const f of files) assert.ok(fs.existsSync(path.join(__dirname, "..", Q.art(f))), "missing " + f);
   }
 });

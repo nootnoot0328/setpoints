@@ -454,7 +454,8 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
      TIERED lists the drawings that have shipped; anything else uses the Common
      drawing until its art lands. Entries look like "weapon:sword:4". */
   const TIERED = new Set([
-    ...["sword", "axe", "bow", "staff"].flatMap(w => [1, 2, 3, 4].map(r => `weapon:${w}:${r}`))
+    ...["sword", "axe", "bow", "staff"].flatMap(w => [1, 2, 3, 4].map(r => `weapon:${w}:${r}`)),
+    ...["kettle"].flatMap(hm => [1, 2, 3, 4].map(r => `helm:${hm}:${r}`))
   ]);
   function artKey(slot, it) {
     const shape = SHAPES[slot][it.shape];
@@ -478,10 +479,10 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
     L.push(["b", "hero-body" + (ar ? "-" + ar : "")], ["ft", "hero-boots" + (bt ? "-" + bt : "")]);
     if (robe) L.push(["hem", "hero-hem-" + ar]);
     const fc = look.face === "classic" ? "" : "-" + look.face;
-    L.push(["w", "hero-wpn-" + w], ["hn", "hero-hand"], ["hd", "hero-face" + fc], ["bl", "hero-blink-face" + fc]);
-    const hairL = ["hr", `hero-hair-${look.hair}-${look.hc}`];
-    if (look.helm && HAIR_MASKED.has(hd.split("-")[0])) hairL.push("hero-hairmask-" + hd);
-    L.push(hairL);
+    // under a helmet, no hair shows above its edge and no skull above the brow line
+    const masked = look.helm && HAIR_MASKED.has(hd.split("-")[0]);
+    L.push(["w", "hero-wpn-" + w], ["hn", "hero-hand"], ["hd", "hero-face" + fc, masked && "hero-facemask-" + hd], ["bl", "hero-blink-face" + fc]);
+    L.push(["hr", `hero-hair-${look.hair}-${look.hc}`, masked && "hero-hairmask-" + hd]);
     if (look.helm) L.push(["hm", "hero-helm-" + hd]);
     return L.map(([k, f, m]) => m ? { k, src: art(f), mask: art(m) } : { k, src: art(f) });
   }
