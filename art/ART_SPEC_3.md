@@ -16,10 +16,10 @@ There are 4 slots with 4 shapes each, and each shape gets 4 new tiers. Common is
 |---|---|---|---|
 | 1 | Weapons | 4 sheets | Icon and hero (the held weapon is cut from the icon) |
 | 2 | Helmets | 4 sheets | Icon and hero |
-| 3 | Armour | 4 icon sheets + 16 hero edits | Icon and hero |
-| 4 | Boots | 4 icon sheets + 16 hero edits | Icon and hero |
+| 3 | Armour | 4 sheets | Icon and hero |
+| 4 | Boots | 4 sheets | Icon and hero |
 
-That's 44 images, plus Part 0. Upload in batches: the app uses whatever has arrived and keeps the Common look for the rest. Weapons come first: 4 images, no hero edits.
+That's 16 images, plus Part 0. Upload in batches: the app uses whatever has arrived and keeps the Common look for the rest. Weapons come first: 4 images, no hero edits.
 
 **Secrecy.** You'll see each design while you generate it, so the looks won't be a surprise. What stays hidden is when an item drops, its stats, its skill and its name. The prompts below don't describe the designs, so you aren't reading a list of rewards; ChatGPT designs them inside the tier ladder.
 
@@ -147,79 +147,22 @@ Check: all heads are the same size, and the eyes sit at the same height in every
 
 ---
 
-## 3. Armour (4 icon sheets, then 16 hero edits)
+## 3 & 4. Armour and boots (4 sheets each)
 
-**Step 1, icons.** Attach **`eq-armor.png`**.
+Same idea as the helmets, but full-body and in portrait: one sheet per shape, 3 columns x 2 rows, with the plain bald hero top-left. The app lines the tiles up by the eyes and cuts out what changed. If a tile's pose drifts, only that tile needs a redo. Inventory icons are cropped from the tiles.
 
-```
-2x2 sheet of body armour icons, transparent background, each shown on its own as if on an invisible mannequin, front view, like the attached sheet. No character.
-Four tiers of [ARMOUR]:
-top-left Uncommon, top-right Rare, bottom-left Epic, bottom-right Legendary.
-[paste TIER RULE]
-```
-
-| File | [ARMOUR] |
+| Files | Shapes |
 |---|---|
-| `eq-armor-leather-tiers.png` | a leather tunic |
-| `eq-armor-chain-tiers.png` | a chainmail shirt |
-| `eq-armor-plate-tiers.png` | plate armour |
-| `eq-armor-robe-tiers.png` | a mage robe |
+| `bodies-armor-<shape>-tiers.png` | leather, chain, plate, robe |
+| `bodies-boots-<shape>-tiers.png` | leather, greaves, winged, wraps |
 
-**Step 2, hero edits.** For each tile, attach **`hero-mid.png`** and the sheet from step 1:
-
-```
-Edit the first attached character. Keep everything identical: same pose, same framing, same position and size in the image, same face, same hair, same helmet, same sword, same boots, same red scarf and cape. Change ONLY the clothing on the torso, arms and upper legs to the [POSITION] outfit from the second attached sheet, matching its design exactly. Transparent background.
-```
-
-For **robes only**, replace "same red scarf and cape" with "remove the red scarf and cape".
-
-| Files | [POSITION] |
-|---|---|
-| `hero-outfit-<shape>-r1.png` | top-left |
-| `hero-outfit-<shape>-r2.png` | top-right |
-| `hero-outfit-<shape>-r3.png` | bottom-left |
-| `hero-outfit-<shape>-r4.png` | bottom-right |
-
-Here `<shape>` is `leather`, `chain`, `plate` or `robe`, so you'll have `hero-outfit-plate-r3.png`, for example.
-
-Check: the hero hasn't moved (flick between it and `hero-mid.png`), the cape is the same, and the outfit matches its icon.
+The prompt is in the "everything left" block below.
 
 ---
 
-## 4. Boots (4 icon sheets, then 16 hero edits)
+## Everything left in one ChatGPT request
 
-**Step 1, icons.** Attach **`eq-boots.png`**.
-
-```
-2x2 sheet of footwear icons, transparent background, each pair alone, side three-quarter view, like the attached sheet.
-Four tiers of [BOOTS]:
-top-left Uncommon, top-right Rare, bottom-left Epic, bottom-right Legendary.
-[paste TIER RULE]
-```
-
-| File | [BOOTS] |
-|---|---|
-| `eq-boots-leather-tiers.png` | leather boots |
-| `eq-boots-greaves-tiers.png` | steel greaves |
-| `eq-boots-winged-tiers.png` | winged boots |
-| `eq-boots-wraps-tiers.png` | cloth wraps and soft shoes |
-
-**Step 2, hero edits.** Attach **`hero-mid.png`** and the sheet from step 1:
-
-```
-Edit the first attached character. Keep everything identical: same pose, same framing, same position and size in the image, same face, same hair, same helmet, same clothes, same sword, same scarf and cape. Change ONLY the footwear, from the knees down, to the [POSITION] boots from the second attached sheet, matching their design exactly. The feet must stay planted in exactly the same place. Transparent background.
-```
-
-| Files | [POSITION] |
-|---|---|
-| `hero-boots-<shape>-r1.png` | top-left |
-| `hero-boots-<shape>-r2.png` | top-right |
-| `hero-boots-<shape>-r3.png` | bottom-left |
-| `hero-boots-<shape>-r4.png` | bottom-right |
-
-Here `<shape>` is `leather`, `greaves`, `winged` or `wraps`.
-
-Check: the soles sit on the same line as in `hero-mid.png`, and nothing above the knee changed.
+See the chat reply from 2 Oct 2026; the same text is kept in `art/PROMPT_ALL_LEFT.md`.
 
 ---
 
