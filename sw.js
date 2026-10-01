@@ -1,6 +1,6 @@
 /* Setpoint service worker — makes the app work offline after the first visit.
    Bump VERSION whenever you change any file so phones pick up the update. */
-const VERSION = "setpoint-3.1.0";
+const VERSION = "setpoint-3.2.0";
 // Quest art lives in its own cache that survives app updates. Bump ART only
 // when files in assets/quest/ change.
 const ART = "setpoint-art-1";

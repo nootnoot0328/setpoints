@@ -928,6 +928,10 @@ body.onb #app{padding-bottom:40px}
 .q-setup h3{margin:16px 0 8px;font-size:15px;color:var(--muted);font-weight:600}
 .q-chips{display:flex;flex-wrap:wrap;gap:8px}
 .q-chips .chip{height:40px;font-size:15px;padding:0 14px}
+.q-hairopts.off{display:none}
+.q-hairopts .q-chips+.q-chips{margin-top:10px}
+.q-chips .chip.q-swatch{width:40px;padding:0;border-radius:50%;background:var(--sw);border:2px solid rgba(255,255,255,.25)}
+.q-chips .chip.q-swatch.on{box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--text)}
 /* sheets */
 .q-sheeth{margin:6px 0 12px;font-size:20px}
 .q-dayhead{display:flex;gap:14px;align-items:center}

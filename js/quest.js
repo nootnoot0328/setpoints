@@ -139,7 +139,18 @@
   /* ================================================================ levels */
   const levelOf = earned => Math.floor(Math.sqrt(Math.max(0, earned) / 40)) + 1;
   function rankOf(lv) { const i = Math.min(RANKS.length - 1, Math.floor((lv - 1) / 5)); return { i, en: RANKS[i], tier: lv - i * 5 }; }
-  function heroOf(S) { const h = (S.game && S.game.hero) || {}; return { cls: CLASSES[h.cls] ? h.cls : "sword", name: typeof h.name === "string" ? h.name.slice(0, 24) : "" }; }
+  /* Cosmetic look: hairstyle and colour show when the helmet is hidden. Stats never change. */
+  const HAIRS = ["short", "spiky", "long", "twin"];
+  const HAIR_NAME = { short: "Short", spiky: "Spiky", long: "Long", twin: "Twin tails" };
+  const HAIR_COLORS = { brown: "#8a5a3a", black: "#34313f", blonde: "#deac4e", ash: "#d6cec8", auburn: "#aa3c28", teal: "#2c8e92" };
+  function lookOf(l) {
+    l = l || {};
+    return { hair: HAIRS.includes(l.hair) ? l.hair : "short", hc: HAIR_COLORS[l.hc] ? l.hc : "brown", helm: l.helm !== false };
+  }
+  function heroOf(S) {
+    const h = (S.game && S.game.hero) || {};
+    return { cls: CLASSES[h.cls] ? h.cls : "sword", name: typeof h.name === "string" ? h.name.slice(0, 24) : "", look: lookOf(h.look) };
+  }
   function equipped(S) {
     const g = S.game || {}, byId = new Map((g.items || []).map(i => [i.id, i])), eq = {};
     for (const s of SLOTS) { const it = g.eq && byId.get(g.eq[s]); if (it && it.slot === s) eq[s] = it; }
@@ -436,10 +447,18 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
       skill: it.skill && SKILLS[it.skill.k] ? it.skill : makeSkill(rnd, r) });
   }
   const iconOf = it => art(ICON_PRE[it.slot] + SHAPES[it.slot][it.shape]);
-  /* Paper-doll layers, back to front. Unequipped slots show the starter look. */
-  function heroLayers(eq) {
-    const w = eq && eq.weapon ? SHAPES.weapon[eq.weapon.shape] : "sword", h = eq && eq.helm ? SHAPES.helm[eq.helm.shape] : "kettle";
-    return [art("hero-body"), art("hero-wpn-" + w), art("hero-hand"), art("hero-head-" + h)];
+  /* Paper-doll layers, back to front, as {k, src}. k "w" is the weapon (poses rotate it).
+     Empty armour/boots show the starting tunic and boots. */
+  function heroLayers(eq, look) {
+    eq = eq || {}; look = lookOf(look);
+    const sh = s => eq[s] ? SHAPES[s][eq[s].shape] : null;
+    const w = sh("weapon") || "sword", hd = sh("helm") || "kettle", ar = sh("armor"), bt = sh("boots");
+    const L = [["b", "hero-body" + (ar ? "-" + ar : "")], ["ft", "hero-boots" + (bt ? "-" + bt : "")]];
+    if (ar === "robe") L.push(["hem", "hero-hem-robe"]);
+    L.push(["w", "hero-wpn-" + w], ["hn", "hero-hand"]);
+    if (look.helm) L.push(["hd", "hero-head-" + hd], ["tl", "hero-tail"]);
+    else L.push(["hd", "hero-face"], ["hr", `hero-hair-${look.hair}-${look.hc}`]);
+    return L.map(([k, f]) => ({ k, src: art(f) }));
   }
 
   /* ================================================================ route
@@ -491,7 +510,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
 
   const Core = { RAR, RCOL, ODDS, PITY_RARE, PITY_LEG, CHEST_COST, RALLY, SLOTS, SLOT_NAME, SHAPES, NOUN, SKILLS, CLASSES, RANKS, MOBS, FLYING, MOB_SCALE, STARTER, THEME, STOPS_XY,
     art, doneSets, stepGoal, stepsOn, dayStatus, mobsForWeek, weekStops, levelOf, rankOf, statsAt, gearOf, equipped, heroOf, baseEvents, battle, bossFor, summary,
-    pityOf, rollRarity, localItem, aiPrompt, parseItem, migrateItem, iconOf, heroLayers, buildRoute, achText, ACH_COUNT: ACH.length, chestSVG, hashF, seeded };
+    pityOf, rollRarity, localItem, aiPrompt, parseItem, migrateItem, iconOf, heroLayers, HAIRS, HAIR_NAME, HAIR_COLORS, lookOf, buildRoute, achText, ACH_COUNT: ACH.length, chestSVG, hashF, seeded };
   if (typeof module === "object" && module.exports) { module.exports = Core; return; }
   root.SPQuestCore = Core;
 
@@ -555,23 +574,38 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
     /* ---------------------------------------------------- the hero (paper doll) */
     // Weapon angles for poses, measured from how each weapon sits in the hand
     const POSE_ANGLE = { sword: { up: 72, rest: -63 }, axe: { up: -22, rest: 0 }, bow: { up: 125, rest: 0 }, staff: { up: -11, rest: 0 } };
-    function doll(eq, cls) {
+    function doll(eq, cls, look) {
       const glow = eq && eq.weapon && eq.weapon.r >= 3 ? C.RCOL[eq.weapon.r] : null;
       const wk = eq && eq.weapon ? C.SHAPES.weapon[eq.weapon.shape] : "sword", a = POSE_ANGLE[wk];
-      const LAYER = ["b", "w", "hn", "hd"];
       return h("div", { class: "q-face" }, h("div", { class: "q-doll " + (cls || ""), style: { "--wv": a.up + "deg", "--wr": a.rest + "deg" } },
-        C.heroLayers(eq).map((src, i) => h("img", { class: LAYER[i], src, alt: i === 0 ? "Your hero" : "", draggable: "false",
-          style: i === 1 && glow ? { filter: `drop-shadow(0 0 3px ${glow}) drop-shadow(0 0 2px ${glow})` } : null }))));
+        C.heroLayers(eq, look || C.heroOf(S()).look).map((l, i) => h("img", { class: l.k, src: l.src, alt: i === 0 ? "Your hero" : "", draggable: "false",
+          style: l.k === "w" && glow ? { filter: `drop-shadow(0 0 3px ${glow}) drop-shadow(0 0 2px ${glow})` } : null }))));
     }
 
     /* ---------------------------------------------------- setup */
     function viewSetup(existing) {
       const g = G(), d = Object.assign({ cls: "sword", name: "" }, existing ? g.hero : {});
+      d.look = C.lookOf(d.look);
       const root = h("div", { class: "quest force-anim" });
       root.append(existing ? X.subhead("Your hero") : X.head("Quest"));
       const note = h("p", { class: "note" }, C.CLASSES[d.cls].note);
+      const stage = h("div", { class: "q-setupstage", style: { backgroundImage: `url("${C.art("bg-forest")}")` } }, doll(C.equipped(S()), "idle", d.look));
+      const redraw = () => stage.replaceChildren(doll(C.equipped(S()), "idle", d.look));
+      // one radio group of chips; pick(k) runs on select
+      const radios = (label, keys, isOn, text, pick, extra) => h("div", { class: "q-chips", role: "radiogroup", "aria-label": label }, keys.map(k => h("button", Object.assign({
+        class: "chip" + (isOn(k) ? " on" : ""), role: "radio", "aria-checked": isOn(k) ? "true" : "false",
+        onclick: e => {
+          e.currentTarget.parentNode.querySelectorAll("button").forEach(b => { b.classList.remove("on"); b.setAttribute("aria-checked", "false"); });
+          e.currentTarget.classList.add("on"); e.currentTarget.setAttribute("aria-checked", "true"); pick(k);
+        }
+      }, extra ? extra(k) : null), text(k))));
+      const hairBox = h("div", { class: "q-hairopts" + (d.look.helm ? " off" : "") },
+        h("h3", null, "Hair"),
+        radios("Hairstyle", C.HAIRS, k => d.look.hair === k, k => C.HAIR_NAME[k], k => { d.look.hair = k; redraw(); }),
+        radios("Hair colour", Object.keys(C.HAIR_COLORS), k => d.look.hc === k, () => "", k => { d.look.hc = k; redraw(); },
+          k => ({ class: "chip q-swatch" + (d.look.hc === k ? " on" : ""), "aria-label": k, title: k, style: { "--sw": C.HAIR_COLORS[k] } })));
       root.append(h("div", { class: "card q-setup" },
-        h("div", { class: "q-setupstage", style: { backgroundImage: `url("${C.art("bg-forest")}")` } }, doll(C.equipped(S()), "idle")),
+        stage,
         existing ? null : h("p", { class: "q-lead" }, "Walk to reach each day's monster. Train to hit the Sunday boss. Eat on target to heal."),
         h("h3", null, "Class"),
         h("div", { class: "q-chips", role: "radiogroup", "aria-label": "Class" }, Object.keys(C.CLASSES).map(k => h("button", {
@@ -582,9 +616,14 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
             e.currentTarget.classList.add("on"); e.currentTarget.setAttribute("aria-checked", "true"); note.textContent = C.CLASSES[k].note;
           }
         }, C.CLASSES[k].en))), note,
+        h("h3", null, "Look"),
+        h("label", { class: "tgl" },
+          h("input", { type: "checkbox", checked: d.look.helm ? true : null, onchange: e => { d.look.helm = e.target.checked; hairBox.classList.toggle("off", d.look.helm); redraw(); } }),
+          h("span", null, h("b", null, "Show helmet"), h("span", null, "Looks only. Your helm's stats count either way."))),
+        hairBox,
         h("h3", null, "Name"),
         h("input", { class: "inp", id: "qName", maxlength: 24, value: d.name, placeholder: "Optional", oninput: e => { d.name = e.target.value; } }),
-        h("button", { class: "btn primary block", style: { marginTop: "16px" }, onclick: () => { g.hero = { cls: d.cls, name: d.name.trim().slice(0, 24) }; X.save(); existing ? X.back() : X.render(true); } },
+        h("button", { class: "btn primary block", style: { marginTop: "16px" }, onclick: () => { g.hero = { cls: d.cls, name: d.name.trim().slice(0, 24), look: d.look }; X.save(); existing ? X.back() : X.render(true); } },
           existing ? "Save" : "Start the adventure")));
       if (!existing) root.append(h("p", { class: "note" }, "Class changes how you fight, not what you train. You can change it later."));
       return root;

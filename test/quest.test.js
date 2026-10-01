@@ -226,12 +226,27 @@ test("every art file the game can ask for exists", () => {
   const files = new Set();
   for (const slot of Q.SLOTS) for (let sh = 0; sh < 4; sh++) {
     files.add(Q.iconOf({ slot, shape: sh }));
-    Q.heroLayers({ [slot]: { slot, shape: sh } }).forEach(f => files.add(f));
+    Q.heroLayers({ [slot]: { slot, shape: sh } }).forEach(l => files.add(l.src));
   }
+  for (const hair of Q.HAIRS) for (const hc of Object.keys(Q.HAIR_COLORS))
+    Q.heroLayers({}, { hair, hc, helm: false }).forEach(l => files.add(l.src));
   Object.keys(Q.MOBS).forEach(m => files.add(Q.art(m)));
   ["bg-forest", "platform", "platform-boss", "flag", "signpost"].forEach(k => files.add(Q.art(k)));
   for (let w = 0; w < 20; w++) files.add(Q.art(Q.bossFor(E.addDays("2026-01-05", w * 7), 1, 3).art));
   for (const f of files) assert.ok(fs.existsSync(path.join(__dirname, "..", f)), "missing " + f);
+});
+
+test("hero look: helmet hides hair, armour and boots change the doll, bad input falls back", () => {
+  const keys = ls => ls.map(l => l.src.split("/").pop());
+  const plain = keys(Q.heroLayers({}));
+  assert.deepStrictEqual(plain, ["hero-body.webp", "hero-boots.webp", "hero-wpn-sword.webp", "hero-hand.webp", "hero-head-kettle.webp", "hero-tail.webp"]);
+  const robe = keys(Q.heroLayers({ armor: { slot: "armor", shape: 3 }, boots: { slot: "boots", shape: 2 } }, { helm: false, hair: "twin", hc: "teal" }));
+  assert.deepStrictEqual(robe, ["hero-body-robe.webp", "hero-boots-winged.webp", "hero-hem-robe.webp", "hero-wpn-sword.webp", "hero-hand.webp", "hero-face.webp", "hero-hair-twin-teal.webp"]);
+  assert.strictEqual(Q.heroLayers({}).find(l => l.k === "w").src.endsWith("hero-wpn-sword.webp"), true);
+  assert.deepStrictEqual(Q.lookOf({ hair: "mohawk", hc: "pink", helm: 0 }), { hair: "short", hc: "brown", helm: true });
+  const S = { game: { hero: { cls: "spell", name: "Stan", look: { hair: "long", hc: "ash", helm: false } } } };
+  assert.deepStrictEqual(Q.heroOf(S).look, { hair: "long", hc: "ash", helm: false });
+  assert.deepStrictEqual(Q.heroOf({ game: { hero: { cls: "spell" } } }).look, { hair: "short", hc: "brown", helm: true });
 });
 
 test("the route passes through every stop in order", () => {
