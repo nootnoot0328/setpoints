@@ -210,6 +210,40 @@ for n, (qx, qy) in WQ.items():
     w[:, :, 3] = np.where(w[:, :, 3] > 110, 255, 0)
     layers["wpn-" + n] = w
 
+# ---------- tier weapons (art/tiers/w-<shape>-r<tier>.png from tools/quest-tiers.py).
+# Placed like the Common weapon; the length on the hero follows each item's size on its
+# sheet relative to the sheet's Uncommon, so bigger tiers are bigger in hand (capped).
+import glob, os
+ICONS = {}
+def strip_fringe(img):
+    # AI matting leaves a red rim on soft edges; only touch pixels next to transparency
+    x = img.astype(int); edge = nd.binary_dilation(x[:, :, 3] < 60, iterations=2) & (x[:, :, 3] > 0)
+    red = (x[:, :, 0] > 140) & (x[:, :, 1] < 120) & (x[:, :, 2] < 110) & (x[:, :, 0] - x[:, :, 1] > 70)
+    img = img.copy(); img[edge & red] = 0
+    return img
+def ends(img):
+    body = img[:, :, 3] > 110
+    lab, k = nd.label(body); big = lab == (np.argmax(nd.sum(body, lab, range(1, k + 1))) + 1)
+    ys, xs = np.nonzero(big); proj = xs - ys
+    return np.array([xs[proj.argmin()], ys[proj.argmin()]], float), np.array([xs[proj.argmax()], ys[proj.argmax()]], float)
+for n in WEAP:
+    files = sorted(glob.glob(f"{SP}/art/tiers/w-{n}-r*.png"))
+    if not files: continue
+    crops = {int(f.rsplit("-r", 1)[1][0]): strip_fringe(np.array(Image.open(f).convert("RGBA"))) for f in files}
+    ref = crops.get(1, next(iter(crops.values()))); t0, p0 = ends(ref); ref_len = np.hypot(*(p0 - t0))
+    for r, c in crops.items():
+        ICONS[f"w-{n}-r{r}"] = c
+        g, L, deg = WEAP[n]
+        tl, tp = ends(c); scale = min(1.3, max(0.85, np.hypot(*(tp - tl)) / ref_len))
+        gp = tl + (tp - tl) * g
+        d = np.array([math.cos(math.radians(deg)), math.sin(math.radians(deg))])
+        full = np.zeros((N, N, 4), np.uint8); hh, ww = c.shape[:2]
+        if hh > N or ww > N: continue
+        full[:hh, :ww] = c
+        w = place(full, (gp, tp), (np.array(GRIP), np.array(GRIP) + d * L * scale * (1 - g)))
+        w[:, :, 3] = np.where(w[:, :, 3] > 110, 255, 0)
+        layers[f"wpn-{n}-r{r}"] = w
+
 # ---------- hair: diff against the bald edit, cleaned, then recoloured
 HAIR_SHIFT = {"short": 1}            # that edit came back 1px high
 HAIR_COLORS = {                       # dark, mid, light
@@ -273,6 +307,13 @@ W = BOX[2] - BOX[0]; H = BOX[3] - BOX[1]; k = 400 / max(W, H); tw, th = round(W 
 for n, l in layers.items():
     Image.fromarray(l).crop(BOX).resize((tw, th), Image.BOX if n.startswith("blink") else Image.LANCZOS).save(f"{OUT}/hero-{n}.webp", "WEBP", quality=92, method=6)
 print(len(layers), "layers", tw, th)
+# inventory icons for tier items: trimmed, square, 128px like the batch-1 icons
+for k, c in ICONS.items():
+    ys, xs = np.nonzero(c[:, :, 3] > 20); c = c[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+    side = int(max(c.shape[:2]) * 1.08); sq = np.zeros((side, side, 4), np.uint8)
+    oy, ox = (side - c.shape[0]) // 2, (side - c.shape[1]) // 2; sq[oy:oy + c.shape[0], ox:ox + c.shape[1]] = c
+    Image.fromarray(sq).resize((128, 128), Image.LANCZOS).save(f"{OUT}/{k}.webp", "WEBP", quality=90, method=6)
+print(len(ICONS), "tier icons")
 
 # ---------- previews
 def stack(names):

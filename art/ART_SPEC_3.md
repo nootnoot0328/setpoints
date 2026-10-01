@@ -101,6 +101,18 @@ top-left Uncommon, top-right Rare, bottom-left Epic, bottom-right Legendary.
 
 Check: the handle is at the bottom-left on every tile, the blade or head points to the top-right, and the weapons are roughly the size of the attached sheet's.
 
+One image holding all four sheets is fine; Claude slices it.
+
+**Uncommon redo (1 image, `eq-weapon-uncommon.png`).** The first batch's Uncommon tiers came back as near-copies of the Common weapons. Attach **`eq-weapon.png`**:
+
+```
+2x2 sheet of equipment icons, transparent background, same style, angle and size as the attached sheet, handle at the bottom-left, tip at the top-right.
+top-left: an Uncommon one-handed sword. top-right: an Uncommon one-handed axe. bottom-left: an Uncommon longbow. bottom-right: an Uncommon wizard's staff.
+Each must be a clearly DIFFERENT design from the matching weapon in the attached sheet: a new silhouette and better materials, still plain and practical, no glow or magic. Do NOT redraw the attached weapons.
+```
+
+Check it against `eq-weapon.png` side by side. If any tile looks like the old weapon, regenerate it.
+
 ---
 
 ## 2. Helmets (4 icon sheets, then 16 hero edits)

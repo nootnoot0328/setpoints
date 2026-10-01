@@ -264,15 +264,18 @@ test("hero look: hair shows under any helmet, class sets the outfit, armour and 
 });
 
 test("rarity picks its own drawing once it ships, never a tint", () => {
-  const it = { slot: "weapon", shape: 0, r: 4 };
-  assert.strictEqual(Q.artKey("weapon", it), "sword");             // not shipped yet: Common drawing
-  Q.TIERED.add("weapon:sword:4");
+  const it = { slot: "boots", shape: 1, r: 4 };
+  assert.strictEqual(Q.artKey("boots", it), "greaves");            // not shipped yet: Common drawing
+  Q.TIERED.add("boots:greaves:4");
   try {
-    assert.strictEqual(Q.artKey("weapon", it), "sword-r4");
-    assert.ok(Q.iconOf(it).endsWith("w-sword-r4.webp"));
-    assert.ok(Q.heroLayers({ weapon: it }).some(l => l.src.endsWith("hero-wpn-sword-r4.webp")));
-    assert.strictEqual(Q.artKey("weapon", { shape: 0, r: 0 }), "sword");
-  } finally { Q.TIERED.delete("weapon:sword:4"); }
+    assert.strictEqual(Q.artKey("boots", it), "greaves-r4");
+    assert.ok(Q.iconOf(it).endsWith("b-greaves-r4.webp"));
+    assert.ok(Q.heroLayers({ boots: it }).some(l => l.src.endsWith("hero-boots-greaves-r4.webp")));
+    assert.strictEqual(Q.artKey("boots", { shape: 1, r: 0 }), "greaves");
+  } finally { Q.TIERED.delete("boots:greaves:4"); }
+  // shipped weapons: Rare to Legendary have their own drawings, Uncommon still uses Common
+  const sw = r => Q.heroLayers({ weapon: { slot: "weapon", shape: 0, r } }).find(l => l.k === "w").src.split("/").pop();
+  assert.deepStrictEqual([0, 1, 2, 3, 4].map(sw), ["hero-wpn-sword.webp", "hero-wpn-sword.webp", "hero-wpn-sword-r2.webp", "hero-wpn-sword-r3.webp", "hero-wpn-sword-r4.webp"]);
   const robe = Q.heroLayers({ armor: { slot: "armor", shape: 3, r: 2 } });
   assert.ok(!robe.some(l => l.k === "cape"));
 });
