@@ -797,30 +797,34 @@ body.onb #app{padding-bottom:40px}
 @keyframes q-swing{0%,34%,64%,100%{transform:none}40%{transform:rotate(-28deg)}48%{transform:rotate(34deg)}}
 .q-mob.fighting .body,.q-boss.fighting .body{animation:q-hit-loop 2.4s ease-in-out infinite}
 @keyframes q-hit-loop{0%,44%,64%,100%{filter:none;transform:none}48%{filter:brightness(2.6) saturate(0);transform:translateX(6%)}54%{transform:translateX(-4%)}}
-.q-mob.fighting::after,.q-boss.fighting::after{content:"";position:absolute;left:30%;top:25%;width:40%;aspect-ratio:1;border-radius:50%;background:radial-gradient(#fff 0,rgba(255,236,170,.8) 30%,transparent 70%);opacity:0;animation:q-slash 2.4s ease-out infinite;pointer-events:none}
-@keyframes q-slash{0%,45%{opacity:0;transform:scale(.3)}48%{opacity:1;transform:scale(1.2)}60%,100%{opacity:0;transform:scale(1.5)}}
+.q-mob.fighting::before,.q-mob.fighting::after,.q-boss.fighting::before,.q-boss.fighting::after{content:"";position:absolute;aspect-ratio:1;background:center/contain no-repeat;opacity:0;pointer-events:none;z-index:2}
+.q-mob.fighting::before,.q-boss.fighting::before{left:5%;top:5%;width:90%;background-image:url("../assets/quest/fx-slash.webp");animation:q-slashfx 2.4s ease-out infinite}
+.q-mob.fighting::after,.q-boss.fighting::after{left:20%;top:20%;width:60%;background-image:url("../assets/quest/fx-impact.webp");animation:q-slash 2.4s ease-out infinite}
+@keyframes q-slashfx{0%,38%{opacity:0;transform:rotate(-40deg) scale(.6)}43%,50%{opacity:1;transform:rotate(0) scale(1)}58%,100%{opacity:0;transform:rotate(15deg) scale(1.1)}}
+@keyframes q-slash{0%,45%{opacity:0;transform:scale(.3)}48%,54%{opacity:1;transform:scale(1.15)}64%,100%{opacity:0;transform:scale(1.4)}}
 .q-mobhp{position:absolute;transform:translate(-50%,-50%);width:13%;height:6px;border-radius:4px;background:rgba(0,0,0,.65);border:1px solid #000;overflow:hidden;z-index:6}
 .q-mobhp i{display:block;height:100%;background:linear-gradient(#FF8A8A,#D9534F)}
 .q-hero.rest .q-doll{animation:q-breath 3.2s ease-in-out infinite}
 .q-hero.rest .q-doll img.w{transform:rotate(var(--wr))}
 @keyframes q-breath{0%,100%{transform:none}50%{transform:scale(1.015,.985)}}
-.q-zz,.q-dizzy{position:absolute;pointer-events:none;opacity:0;font-weight:800}
-.q-zz{right:2%;top:2%;color:#CFE0FF;font-size:16px;text-shadow:0 1px 2px #000}
-.q-zz small{font-size:11px;margin-left:2px}
+.q-zz,.q-dizzy,.q-confetti{position:absolute;pointer-events:none;opacity:0}
+.q-zz{right:-25%;top:-18%;width:55%}
 .q-hero.rest .q-zz{animation:q-zz 2.6s ease-in-out infinite}
 @keyframes q-zz{0%{opacity:0;transform:translate(0,6px)}30%,70%{opacity:1}100%{opacity:0;transform:translate(8px,-14px)}}
 .q-hero.victory .q-doll,.q-fighter.victory .q-doll{animation:q-cheer 1.1s ease-in-out infinite}
 .q-hero.victory .q-doll img.w,.q-fighter.victory .q-doll img.w{transform:rotate(var(--wv))}
 @keyframes q-cheer{0%,100%{transform:none}40%{transform:translateY(-9%) scale(1.02,.98)}55%{transform:translateY(-10%)}}
-.q-hero.victory::after{content:"✦  ✧  ✦";position:absolute;left:50%;top:-8%;transform:translateX(-50%);color:#F4C35A;font-size:13px;white-space:nowrap;text-shadow:0 0 6px rgba(244,195,90,.9);animation:q-twinkle 1.1s ease-in-out infinite}
+.q-confetti{left:-35%;top:-40%;width:170%}
+.q-hero.victory .q-confetti{animation:q-confetti 1.8s ease-out infinite}
+@keyframes q-confetti{0%{opacity:0;transform:translateY(20%) scale(.6)}25%{opacity:1}100%{opacity:0;transform:translateY(-10%) scale(1.1)}}
 @keyframes q-twinkle{50%{opacity:.35}}
 .q-hero.ko .q-doll,.q-fighter.ko .q-doll{transform:rotate(80deg) translate(-8%,8%);filter:saturate(.45) brightness(.85);animation:none}
-.q-hero.ko .q-dizzy{opacity:1;left:45%;top:50%;color:#F4C35A;font-size:12px;animation:q-spin 1.6s linear infinite}
+.q-hero.ko .q-dizzy{opacity:1;left:35%;top:45%;width:70%;animation:q-spin 1.6s linear infinite}
 .q-hero.ko .q-shadow{left:10%;right:-20%}
 .q-hero.ko.ko-l .q-doll{transform:rotate(-80deg) translate(8%,8%)}
 .q-hero.ko.ko-l .q-shadow{left:-20%;right:10%}
-.q-hero.ko.ko-l .q-dizzy{left:5%}
-@keyframes q-spin{0%{transform:translateX(0)}50%{transform:translateX(12px)}100%{transform:translateX(0)}}
+.q-hero.ko.ko-l .q-dizzy{left:-5%}
+@keyframes q-spin{0%{transform:rotate(0) scaleY(.6)}100%{transform:rotate(360deg) scaleY(.6)}}
 .q-shadow{position:absolute;left:22%;right:22%;bottom:-2%;height:6%;border-radius:50%;background:rgba(0,0,0,.45);filter:blur(2px)}
 .q-doll{position:relative;width:100%;aspect-ratio:333/400}
 .q-doll img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
@@ -993,5 +997,29 @@ body.onb #app{padding-bottom:40px}
 .q-dl.bad b,.q-dl.bad .q-ico{color:var(--bad)}
 .q-dl.quiet span{color:var(--faint)}
 @media (prefers-reduced-motion: reduce){
-  .q-mob .body,.q-boss .body,.q-fog,.q-spark,.q-doll,.q-doll img.w,.q-zz,.q-hero.victory::after,.q-mob.fighting::after,.q-boss.fighting::after,.q-chestpic.wiggle,.q-bigchest.shake,.q-burst,.q-bigicon.pop,.q-fighter.lunge,.q-fighter.lunge-l,.q-fighter.hurt,.q-float{animation:none}
+  .q-mob .body,.q-boss .body,.q-fog,.q-spark,.q-doll,.q-doll img.w,.q-zz,.q-mob.fighting::after,.q-boss.fighting::after,.q-mob.fighting::before,.q-boss.fighting::before,.q-hero.victory .q-confetti,.q-chestpic.wiggle,.q-bigchest.shake,.q-burst,.q-bigicon.pop,.q-fighter.lunge,.q-fighter.lunge-l,.q-fighter.hurt,.q-float{animation:none}
 }
+/* effect sprites and loot art */
+.q-coin{width:22px;height:22px;object-fit:contain;flex:none}
+.q-coin.sm{width:18px;height:18px;margin-right:2px}
+.q-chestpic img,.q-bigchest img{width:100%;height:100%;object-fit:contain;display:block}
+.q-chestpic{width:58px;height:58px}
+.q-chestpic.none{filter:grayscale(1);opacity:.45}
+.q-minichest{width:22px;height:22px;object-fit:contain}
+.q-openchest{display:block;width:88px;margin:4px auto -6px;position:relative;animation:q-pop .5s cubic-bezier(.2,1.6,.4,1) both}
+.q-fx{position:absolute;transform:translate(-50%,-100%);pointer-events:none;z-index:7}
+.q-fx img{display:block;width:100%}
+.q-fx-dust{width:6%;animation:q-fxfade .7s ease-out forwards}
+.q-fx-impact{width:12%;transform:translate(-50%,-50%);animation:q-fxpop .45s ease-out forwards}
+.q-fx-coins{width:16%;animation:q-fxrise .9s ease-out forwards}
+@keyframes q-fxfade{from{opacity:.9;transform:translate(-50%,-100%) scale(.6)}to{opacity:0;transform:translate(-50%,-115%) scale(1.1)}}
+@keyframes q-fxpop{from{opacity:1;transform:translate(-50%,-50%) scale(.4)}to{opacity:0;transform:translate(-50%,-50%) scale(1.3)}}
+@keyframes q-fxrise{from{opacity:1;transform:translate(-50%,-80%) scale(.5)}to{opacity:0;transform:translate(-50%,-150%) scale(1.1)}}
+.q-bfx{position:absolute;bottom:22%;width:30%;pointer-events:none}
+.q-bfx.right{right:14%}.q-bfx.left{left:6%}
+.q-bfx.q-fx-slash{animation:q-fxpop .35s ease-out forwards;transform-origin:center}
+.q-bfx.q-fx-impact{animation:q-fxpop .45s ease-out forwards}
+.q-bfx.q-fx-heal{width:22%;animation:q-fxrise .9s ease-out forwards}
+.q-bfx.q-fx-confetti{width:50%;bottom:30%;animation:q-fxrise 1.6s ease-out forwards}
+.q-bfx.q-fx-coins{animation:q-fxrise 1.2s ease-out forwards}
+@media (prefers-reduced-motion: reduce){.q-fx,.q-bfx{display:none}}

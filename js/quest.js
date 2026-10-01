@@ -567,7 +567,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
     /* ---------------------------------------------------- setup */
     function viewSetup(existing) {
       const g = G(), d = Object.assign({ cls: "sword", name: "" }, existing ? g.hero : {});
-      const root = h("div", { class: "quest" });
+      const root = h("div", { class: "quest force-anim" });
       root.append(existing ? X.subhead("Your hero") : X.head("Quest"));
       const note = h("p", { class: "note" }, C.CLASSES[d.cls].note);
       root.append(h("div", { class: "card q-setup" },
@@ -641,7 +641,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
       const faceFoe = () => hero.classList.toggle("flip", C.STOPS_XY[t][0] > ROUTE.pointAt(heroS).x + 0.5);
       const POSES = ["fight", "rest", "victory", "ko"];
       const setPose = p => { POSES.forEach(c => hero.classList.toggle(c, c === p)); if (foe) foe.classList.toggle("fighting", p === "fight"); if (p) faceFoe(); };
-      hero.append(h("span", { class: "q-zz", "aria-hidden": "true" }, "z", h("small", null, "z")), h("span", { class: "q-dizzy", "aria-hidden": "true" }, "✦ ✧ ✦"));
+      hero.append(h("img", { class: "q-zz", src: C.art("fx-zz"), alt: "" }), h("img", { class: "q-dizzy", src: C.art("fx-dizzy"), alt: "" }), h("img", { class: "q-confetti", src: C.art("fx-confetti"), alt: "" }));
       hero.classList.toggle("ko-l", C.STOPS_XY[t][0] >= 50);   // fall away from the day label
       setPose(pose);
       if (pose === "fight" && t < 6) {
@@ -649,14 +649,17 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
         at("q-mobhp", mx, my - (C.FLYING[stops[t].mob] ? 12.5 : 8), h("i", { style: { width: (left * 100).toFixed(1) + "%" } }));
       }
       const pop = (txt, x, y, cls) => { const p = at("q-pop" + (cls ? " " + cls : ""), x, y); p.textContent = txt; setTimeout(() => p.remove(), 950); };
+      // one-shot effect sprites: dust, impact, coins
+      const fx = (k, x, y, ms) => { const e = at("q-fx q-fx-" + k, x, y, im("fx-" + k)); setTimeout(() => e.remove(), ms || 800); };
       function walk(from, to, ms) {
         return new Promise(res => {
-          const t0 = performance.now(), right = ROUTE.pointAt(to).x > ROUTE.pointAt(from).x;
+          const t0 = performance.now(), right = ROUTE.pointAt(to).x > ROUTE.pointAt(from).x; let lastDust = 0;
           hero.classList.toggle("flip", right);
           const f = now => {
             if (!hero.isConnected) return res();
             const k = Math.min(1, (now - t0) / ms), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
             place(from + (to - from) * e, Math.abs(Math.sin(k * Math.PI * 5)) * 1.4);
+            if (now - lastDust > 260 && k < 0.95) { lastDust = now; const p = ROUTE.pointAt(from + (to - from) * e); fx("dust", p.x, p.y, 700); }
             if (k < 1) requestAnimationFrame(f); else res();
           };
           requestAnimationFrame(f);
@@ -667,7 +670,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
         hero.animate([{ transform: "translate(-50%,-100%)" }, { transform: `translate(${dx},-104%)` }, { transform: "translate(-50%,-100%)" }], { duration: 300, easing: "ease-out" });
         await sleep(140);
         el.classList.remove("hit"); void el.offsetWidth; el.classList.add("hit");
-        pop("−" + dmg, xy[0], xy[1] - 11);
+        pop("−" + dmg, xy[0], xy[1] - 11); fx("impact", xy[0], xy[1] - 5, 450);
         await sleep(380);
       }
       // replay what happened since you last looked: walk to and strike each newly beaten monster
@@ -684,7 +687,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
           for (const i of fresh) {
             await walk(s0, ROUTE.at[i] - 11, 1300);
             for (let k = 0; k < 2; k++) await strike(mobEls[i], C.STOPS_XY[i], 30 + Math.floor(rand() * 60));
-            mobEls[i].classList.add("dead"); pop("+15 gold", C.STOPS_XY[i][0], C.STOPS_XY[i][1] - 15, "gold");
+            mobEls[i].classList.add("dead"); fx("coins", C.STOPS_XY[i][0], C.STOPS_XY[i][1] - 5, 900); pop("+15 gold", C.STOPS_XY[i][0], C.STOPS_XY[i][1] - 15, "gold");
             await sleep(350);
             await walk(ROUTE.at[i] - 11, ROUTE.at[i], 450); s0 = ROUTE.at[i];
           }
@@ -701,9 +704,9 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
       const g = G();
       if (!g.hero) return viewSetup(false);
       const sum = housekeep(), td = E.today(), ws = E.weekStart(td), t = E.daysBetween(ws, td), w = sum.week;
-      const root = h("div", { class: "quest" });
+      const root = h("div", { class: "quest force-anim" });
       root.append(X.head("Quest",
-        h("div", { class: "q-goldchip", "aria-label": `${sum.gold} gold` }, ico("coin"), h("b", null, fmt(sum.gold))),
+        h("div", { class: "q-goldchip", "aria-label": `${sum.gold} gold` }, h("img", { class: "q-coin", src: C.art("coin"), alt: "" }), h("b", null, fmt(sum.gold))),
         X.iconBtn("dots", "Quest options", () => X.openMenu([
           ["user", "Edit hero", () => X.push({ v: "qhero" })],
           ["target", `Daily step goal · ${fmt(sum.stepGoal)}`, () => stepGoalSheet()],
@@ -765,13 +768,13 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
       const n = sum.pending.length;
       const chest = h("div", { class: "card q-chests" + (n ? " has" : "") },
         h("div", { class: "q-chestrow" },
-          h("div", { class: "q-chestpic" + (n ? " wiggle" : ""), html: C.chestSVG(n ? "#E2A91F" : "#9AA0A6") }),
+          h("div", { class: "q-chestpic" + (n ? " wiggle" : " none") }, h("img", { src: C.art("chest"), alt: "" })),
           h("div", { class: "q-chesttxt" },
             h("b", null, n ? `${n} chest${n > 1 ? "s" : ""} waiting` : "No chests waiting"),
             h("span", null, n ? "What's inside is decided when you open it." : "Beat monsters, finish workouts of 6+ sets, eat on target, or slay the boss."))));
       const btns = h("div", { class: "btnrow", style: { marginTop: "12px" } });
       if (n) btns.append(h("button", { class: "btn primary", onclick: () => openChest(sum.pending[0]) }, n > 1 ? "Open one" : "Open it"));
-      btns.append(h("button", { class: "btn" + (sum.gold < C.CHEST_COST ? " dim" : ""), onclick: () => buyChest() }, ico("coin", "sm"), `Buy a chest · ${C.CHEST_COST}`));
+      btns.append(h("button", { class: "btn" + (sum.gold < C.CHEST_COST ? " dim" : ""), onclick: () => buyChest() }, h("img", { class: "q-coin sm", src: C.art("coin"), alt: "" }), `Buy a chest · ${C.CHEST_COST}`));
       chest.append(btns);
       root.append(chest);
 
@@ -791,7 +794,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
         root.append(X.section("Recent"));
         root.append(h("div", { class: "card q-recent" }, sum.events.slice(0, 8).map(e => h("div", { class: "q-ev" },
           h("div", null, h("b", null, e.label), h("span", null, X.dShort(e.date))),
-          h("div", { class: "q-evr" }, e.chest ? h("span", { class: "q-minichest", html: C.chestSVG("#E2A91F") }) : null, h("b", null, "+" + e.gold))))));
+          h("div", { class: "q-evr" }, e.chest ? h("img", { class: "q-minichest", src: C.art("chest"), alt: "Chest" }) : null, h("b", null, "+" + e.gold))))));
       }
       root.append(h("details", { class: "card q-rules" }, h("summary", null, "How it works"),
         h("ul", null,
@@ -880,7 +883,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
       const slot = C.SLOTS[Math.floor(rand() * C.SLOTS.length)], shape = Math.floor(rand() * 4);
       let item = C.localItem(rand, slot, shape, r);
       const box = h("div", { class: "q-reveal", style: { "--rc": C.RCOL[r] } },
-        h("div", { class: "q-bigchest shake", html: C.chestSVG("#E2A91F") }), h("p", { class: "note" }, "Opening…"));
+        h("div", { class: "q-bigchest shake" }, h("img", { src: C.art("chest"), alt: "" })), h("p", { class: "note" }, "Opening…"));
       X.openSheet(sh => sh.append(box));
       const t0 = Date.now();
       if (X.aiReady && X.aiReady()) {
@@ -895,7 +898,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
       if (!box.isConnected) { X.render(false); return; }
       const left = summary().pending, card = itemCard(item);
       box.replaceWith(card);
-      card.prepend(h("div", { class: "q-burst" }));
+      card.prepend(h("div", { class: "q-burst" }), h("img", { class: "q-openchest", src: C.art("chest-open"), alt: "" }));
       card.querySelector(".q-bigicon").classList.add("pop");
       card.append(h("div", { class: "btnrow", style: { justifyContent: "center", marginTop: "14px" } },
         h("button", { class: "btn primary", onclick: () => { g.eq[slot] = item.id; X.save(); X.closeSheet(); X.render(false); } }, "Equip"),
@@ -906,7 +909,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
     /* ---------------------------------------------------- battle log */
     function viewBattle(top) {
       const sum = summary(), w = sum.weeks.find(x => x.ws === top.ws) || sum.week;
-      const root = h("div", { class: "quest" });
+      const root = h("div", { class: "quest force-anim" });
       root.append(X.subhead("Battle log"));
       const endPose = w.won ? "victory" : w.php <= 0 ? "ko" : "";
       const heroPic = h("div", { class: "q-fighter hero " + endPose }, doll(sum.eq));
@@ -922,24 +925,25 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
           h("div", null, h("div", { class: "q-hplbl" }, sum.hero.name || "You"), pBox),
           h("div", null, h("div", { class: "q-hplbl" }, w.boss.name), bBox))));
       const float = (txt, cls) => { const e = h("span", { class: "q-float " + cls }, txt); pop.append(e); setTimeout(() => e.remove(), 1100); };
+      const burst = (k, side, ms) => { const e = h("img", { class: "q-bfx " + side + " q-fx-" + k, src: C.art("fx-" + k), alt: "" }); pop.append(e); setTimeout(() => e.remove(), ms || 600); };
       const kick = (el, cls) => { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); };
       let playing = false;
       const replay = h("button", { class: "btn primary", onclick: async () => {
         if (playing) return; playing = true; replay.disabled = true; bossPic.classList.remove("dead"); heroPic.classList.remove("victory", "ko");
         let b = w.hp, p = w.stats.hp; setBars(b, p);
         for (const d of w.days) {
-          if (d.heal) { p = Math.min(w.stats.hp, p + d.heal); float("+" + d.heal, "heal"); setBars(b, p); await sleep(420); }
+          if (d.heal) { p = Math.min(w.stats.hp, p + d.heal); float("+" + d.heal, "heal"); burst("heal", "left", 900); setBars(b, p); await sleep(420); }
           for (const x of d.hits) {
-            kick(heroPic, "lunge"); await sleep(200); kick(bossPic, "hurt");
+            kick(heroPic, "lunge"); burst("slash", "right", 350); await sleep(200); kick(bossPic, "hurt"); burst("impact", "right", 450);
             b -= x.dmg; float("−" + fmt(x.dmg) + (x.crits ? " ✦" : ""), "dmg"); setBars(b, p);
             if (x.heal) p = Math.min(w.stats.hp, p + x.heal);
             await sleep(560);
           }
           if (d.bossHeal) { b = Math.min(w.hp, b + d.bossHeal); float("+" + fmt(d.bossHeal), "bheal"); setBars(b, p); await sleep(340); }
-          if (d.strike) { kick(bossPic, "lunge-l"); await sleep(200); kick(heroPic, "hurt"); p = Math.max(0, p - d.strike); float("−" + d.strike, "hit"); setBars(b, p); await sleep(560); }
+          if (d.strike) { kick(bossPic, "lunge-l"); await sleep(200); kick(heroPic, "hurt"); burst("impact", "left", 450); p = Math.max(0, p - d.strike); float("−" + d.strike, "hit"); setBars(b, p); await sleep(560); }
           else if (d.warded) { float("Blocked", "heal"); await sleep(380); }
         }
-        if (w.won) bossPic.classList.add("dead");
+        if (w.won) { bossPic.classList.add("dead"); burst("confetti", "left", 1600); burst("coins", "right", 1200); }
         if (endPose) heroPic.classList.add(endPose);
         playing = false; replay.disabled = false;
       } }, "Replay the week");
