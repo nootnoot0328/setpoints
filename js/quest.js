@@ -455,7 +455,10 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
      drawing until its art lands. Entries look like "weapon:sword:4". */
   const TIERED = new Set([
     ...["sword", "axe", "bow", "staff"].flatMap(w => [1, 2, 3, 4].map(r => `weapon:${w}:${r}`)),
-    ...["kettle"].flatMap(hm => [1, 2, 3, 4].map(r => `helm:${hm}:${r}`))
+    ...["kettle", "horned", "hood", "circlet"].flatMap(hm => [1, 2, 3, 4].map(r => `helm:${hm}:${r}`)),
+    ...["leather", "chain", "plate"].flatMap(a => [1, 2, 3, 4].map(r => `armor:${a}:${r}`)),
+    ...[2, 3, 4].map(r => `armor:robe:${r}`),                                   // robe Uncommon: redo pending
+    ...["leather", "greaves", "winged", "wraps"].flatMap(b => [1, 2, 3, 4].map(r => `boots:${b}:${r}`))
   ]);
   function artKey(slot, it) {
     const shape = SHAPES[slot][it.shape];

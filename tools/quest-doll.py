@@ -240,7 +240,7 @@ def helmet_from(t8, base8, key, masked):
     r_, g_, b_ = t[:, :, 0], t[:, :, 1], t[:, :, 2]
     mx = t[:, :, :3].max(2); mn = t[:, :, :3].min(2); sat = (mx - mn) / np.maximum(mx, 1)
     hue = np.degrees(np.arctan2(np.sqrt(3) * (g_ - b_), 2 * r_ - g_ - b_)) % 360
-    hair = (hue > 8) & (hue < 34) & (sat > 0.3) & (mx < 190)
+    hair = ((hue > 345) | (hue < 34)) & (sat > 0.3) & (mx < 200)     # brown or red locks
     skin = (r_ > 190) & (g_ > 140) & (b_ > 115) & (r_ - b_ > 25) & (r_ - b_ < 95) & (sat < 0.45)
     below = yy > EYE_Y - 40
     d &= ~(below & (hair | skin))
@@ -288,6 +288,138 @@ for hn in ["kettle", "horned", "hood", "circlet"]:
         helmet_from(D[r], D["base"], f"{hn}-{r}", hn in HELM_CUT)
         tile = T[r].copy(); tile[:, :, 3] = np.where(tile[:, :, 3] > 200, tile[:, :, 3], 0)
         HELM_ICONS[f"h-{hn}-{r}"] = tile
+
+# ---------- merged tier sheets (art/sets-*.png): ChatGPT packed several tier sets into one
+# image. Every figure is found by its eyes (a level pair of blue spots; gem pairs are
+# dropped as outliers in their row) and moved onto the doll by them.
+#   body sets: sets side by side; each = top row [reference, Uncommon, Rare],
+#              bottom row [Epic, Legendary]. The reference is the plain hero or the base item.
+#   head sets: sets stacked; same 3 + 2 layout per set, plain head first.
+TIER_ICONS = {}
+def eye_pairs(a, dmin, dmax):
+    ai = a.astype(int)
+    blue = (ai[:, :, 2] > ai[:, :, 0] + 50) & (ai[:, :, 2] > 130) & (ai[:, :, 3] > 200)
+    lab, k = nd.label(blue); sz = nd.sum(blue, lab, range(1, k + 1))
+    pts = [nd.center_of_mass(blue, lab, i + 1)[::-1] for i in range(k) if sz[i] >= 20]
+    pairs = sorted([(p, q) for p in pts for q in pts if dmin <= q[0] - p[0] <= dmax and abs(q[1] - p[1]) < 0.15 * (q[0] - p[0])],
+                   key=lambda pq: abs(pq[0][1] - pq[1][1]))
+    used, out = set(), []
+    for p, q in pairs:
+        if p in used or q in used: continue
+        used |= {p, q}; out.append((p, q))
+    return out
+def eye_rows(pairs, gap, tol=25):
+    rows = []
+    for pq in sorted(pairs, key=lambda pq: pq[0][1]):
+        if rows and abs(pq[0][1] - np.median([r[0][1] for r in rows[-1]])) < tol: rows[-1].append(pq)
+        else: rows.append([pq])
+    clean = []
+    for row in rows:
+        if len(row) < 2: continue
+        dmed = np.median([q[0] - p[0] for p, q in row]); ymed = np.median([p[1] for p, q in row])
+        keep = []
+        for pq in sorted(row, key=lambda pq: abs(pq[0][1] - ymed) + abs((pq[1][0] - pq[0][0]) - dmed)):
+            if all(abs(pq[0][0] - k[0][0]) > gap for k in keep): keep.append(pq)
+        clean.append(sorted(keep, key=lambda pq: pq[0][0]))
+    return clean
+def onto_doll(img, src_eyes, box=None):
+    if box is not None:      # (left, top, right, bottom) in eye-distances from the eyes' midpoint
+        (p, q) = src_eyes; mx, my = (p[0] + q[0]) / 2, (p[1] + q[1]) / 2; d = q[0] - p[0]
+        x0, y0, x1, y1 = [int(round(v)) for v in (mx - box[0] * d, my - box[1] * d, mx + box[2] * d, my + box[3] * d)]
+        img = img.copy(); keep = np.zeros(img.shape[:2], bool)
+        keep[max(0, y0):max(0, y1), max(0, x0):max(0, x1)] = True; img[~keep] = 0
+    (a1, a2), (b1, b2) = src_eyes, eyes_of(layers["face"])[1]
+    sv = np.subtract(a2, a1); dv = np.subtract(b2, b1)
+    sc = np.hypot(*dv) / np.hypot(*sv); ang = math.atan2(dv[1], dv[0]) - math.atan2(sv[1], sv[0])
+    cc, si = math.cos(ang) * sc, math.sin(ang) * sc
+    M = np.array([[cc, -si], [si, cc]]); tt = np.mean([b1, b2], 0) - M @ np.mean([a1, a2], 0)
+    Mi = np.linalg.inv(M); ti = -Mi @ tt
+    out = np.array(Image.fromarray(img).transform((N, N), Image.AFFINE, (Mi[0, 0], Mi[0, 1], ti[0], Mi[1, 0], Mi[1, 1], ti[1]), resample=Image.NEAREST))
+    out[:, :, 3] = np.where(out[:, :, 3] > 200, 255, 0)
+    return out
+def icon_crop(t, box):
+    x0, y0, x1, y1 = box; c = t[y0:y1, x0:x1].copy()
+    return c
+BODY_X1 = 650      # neighbouring figures start past here once lined up
+SET_FILES = {
+    "sets-armor-leather-chain-plate.png": ("body", [("armor", "leather"), ("armor", "chain"), ("armor", "plate")]),
+    "sets-robe-bootsleather-greaves.png": ("body", [("armor", "robe"), ("boots", "leather"), ("boots", "greaves")]),
+    "sets-boots-winged-wraps.png": ("body", [("boots", "winged"), ("boots", "wraps")]),
+    "sets-helm-horned-hood-circlet.png": ("head", [("helm", "horned"), ("helm", "hood"), ("helm", "circlet")]),
+}
+for fn, (kind, sets) in SET_FILES.items():
+    pth = f"{SP}/art/{fn}"
+    if not os.path.exists(pth): continue
+    sheet = np.array(Image.open(pth).convert("RGBA"))
+    if kind == "body":
+        rows = eye_rows(eye_pairs(sheet, 18, 62), gap=100)
+        rows = sorted(sorted(rows, key=len, reverse=True)[:2], key=lambda r: r[0][0][1])
+        top, bot = rows
+        assert len(top) == 3 * len(sets) and len(bot) == 2 * len(sets), (fn, len(top), len(bot))
+        groups = [dict(zip(["ref", "r1", "r2"], top[3 * g:3 * g + 3]), **dict(zip(["r3", "r4"], bot[2 * g:2 * g + 2]))) for g in range(len(sets))]
+    else:
+        rows = [r for r in eye_rows(eye_pairs(sheet, 40, 90), gap=150) if len(r) >= 2]
+        rows.sort(key=lambda r: r[0][0][1])
+        assert len(rows) == 2 * len(sets), (fn, [len(r) for r in rows])
+        groups = [dict(zip(["base", "r1", "r2"], rows[2 * g][:3]), **dict(zip(["r3", "r4"], rows[2 * g + 1][:2]))) for g in range(len(sets))]
+    def neighbour_sword_cut(t, own, row):
+        # the next figure's sword runs behind this one; only its hilt (right edge, low) and
+        # its tip (in the gap left of the legs) show. Clear blade-coloured pixels there only.
+        ti = t.astype(int); mxc = ti[:, :, :3].max(2); mnc = ti[:, :, :3].min(2)
+        steel = (t[:, :, 3] > 0) & ((mxc - mnc) < 40) & (mxc > 110)
+        gold = (t[:, :, 3] > 0) & (ti[:, :, 0] > 160) & (ti[:, :, 2] < 110) & (ti[:, :, 1] > 100)
+        zone = np.zeros((N, N), bool); zone[530:665, 280:330] = True; zone[540:665, 548:] = True
+        kill = zone & (steel | gold)
+        kill = nd.binary_dilation(kill, iterations=2) & zone & ~((ti[:, :, 0] > 120) & (ti[:, :, 1] < 70))   # keep red cloth
+        t = t.copy(); t[kill] = 0
+        return t
+    for (slot, shape), grp in zip(sets, groups):
+        if slot == "helm":
+            base = onto_doll(sheet, grp["base"], (2.3, 2.8, 2.3, 1.7))
+            for r in ["r1", "r2", "r3", "r4"]:
+                t = onto_doll(sheet, grp[r], (2.3, 2.8, 2.3, 1.7))
+                t[NECK + 14:] = 0; t[:, BODY_X1:] = 0
+                b2 = base.copy(); b2[NECK + 14:] = 0
+                helmet_from(t, b2, f"{shape}-{r}", shape in HELM_CUT)
+                ic = t[60:NECK + 14, 150:BODY_X1].copy(); m_ = ic[:, :, 3] > 0
+                lab_, k_ = nd.label(m_); ic[lab_ != (np.argmax(nd.sum(m_, lab_, range(1, k_ + 1))) + 1)] = 0   # just this head
+                TIER_ICONS[f"h-{shape}-{r}"] = ic
+            continue
+        for r in ["r1", "r2", "r3", "r4"]:
+            t = onto_doll(sheet, grp[r], (4.8, 2.4, 3.4, 7.2)); t[:, BODY_X1:] = 0
+            t = neighbour_sword_cut(t, grp[r], top if r in ("r1", "r2") else bot)
+            t[:495, :270] = 0                                   # the previous figure's cape
+            t[~blobs(t[:, :, 3] > 0, 3000)] = 0
+            if slot == "armor":
+                robe = shape == "robe"
+                b = t.copy(); b[:NECK] = 0; b[KNEE:] = 0
+                b[495:640, :280] = 0                             # its own sword: the doll draws one
+                b[563:640, :318] = 0                             # and the guard under the glove
+                if not robe:
+                    b[CAPE_Y0:CAPE_Y1, CAPE_X:] = 0               # the cape is its own layer
+                    b[CAPE_Y1:KNEE, 560:] = 0                     # and the strip under it
+                    b[588:KNEE, 495:] = 0                         # their right thigh sits a little wider than ours
+                b[~blobs(b[:, :, 3] > 0, 150)] = 0
+                layers[f"body-{shape}-{r}"] = b
+                if robe:      # the robe's hem hangs over the boots
+                    hm = diff(t, layers["boots"]); hm[:KNEE] = False; hm[665:] = False; hm[:, :300] = False
+                    hm = blobs(hm, 60)
+                    h2 = np.zeros_like(t); h2[hm] = t[hm]; layers[f"hem-robe-{r}"] = h2
+                ic = b.copy()
+                if not robe:
+                    cm = layers["cape"][:, :, 3] > 0; ic[cm & (ic[:, :, 3] == 0)] = layers["cape"][cm & (ic[:, :, 3] == 0)]
+                else:
+                    hk = layers[f"hem-robe-{r}"][:, :, 3] > 0; ic[hk] = layers[f"hem-robe-{r}"][hk]
+                TIER_ICONS[f"a-{shape}-{r}"] = ic[NECK - 20:KNEE + 70, 300:BODY_X1]
+            else:
+                b = np.zeros_like(t); b[KNEE:] = t[KNEE:]; b[KNEE:, :315] = 0
+                b[~blobs(b[:, :, 3] > 0, 400)] = 0
+                ys = np.nonzero(b[:, :, 3].max(1) > 0)[0]
+                if len(ys) and ys.max() > 703:                   # taller boots: squash to fit the box
+                    part = Image.fromarray(b[KNEE:ys.max() + 1]).resize((N, 703 - KNEE + 1), Image.NEAREST)
+                    b = np.zeros_like(b); b[KNEE:704] = np.array(part)
+                layers[f"boots-{shape}-{r}"] = b
+                TIER_ICONS[f"b-{shape}-{r}"] = b[KNEE - 10:N, 300:BODY_X1]
 
 # ---------- weapons from the icon sheet, put in the hand
 wsheet = load("eq-weapon")
@@ -410,12 +542,12 @@ for n, l in layers.items():
     Image.fromarray(l).crop(BOX).resize((tw, th), Image.BOX if n.startswith("blink") else Image.LANCZOS).save(f"{OUT}/hero-{n}.webp", "WEBP", quality=92, method=6)
 print(len(layers), "layers", tw, th)
 # inventory icons for tier items: trimmed, square, 128px like the batch-1 icons
-for k, c in list(ICONS.items()) + list(HELM_ICONS.items()):
+for k, c in list(ICONS.items()) + list(HELM_ICONS.items()) + list(TIER_ICONS.items()):
     ys, xs = np.nonzero(c[:, :, 3] > 20); c = c[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
     side = int(max(c.shape[:2]) * 1.08); sq = np.zeros((side, side, 4), np.uint8)
     oy, ox = (side - c.shape[0]) // 2, (side - c.shape[1]) // 2; sq[oy:oy + c.shape[0], ox:ox + c.shape[1]] = c
     Image.fromarray(sq).resize((128, 128), Image.LANCZOS).save(f"{OUT}/{k}.webp", "WEBP", quality=90, method=6)
-print(len(ICONS) + len(HELM_ICONS), "tier icons")
+print(len(ICONS) + len(HELM_ICONS) + len(TIER_ICONS), "tier icons")
 
 # ---------- previews
 def stack(names):

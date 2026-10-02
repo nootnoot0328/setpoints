@@ -266,15 +266,16 @@ test("hero look: hair shows under any helmet, class sets the outfit, armour and 
 });
 
 test("rarity picks its own drawing once it ships, never a tint", () => {
-  const it = { slot: "boots", shape: 1, r: 4 };
-  assert.strictEqual(Q.artKey("boots", it), "greaves");            // not shipped yet: Common drawing
-  Q.TIERED.add("boots:greaves:4");
+  const it = { slot: "armor", shape: 3, r: 1 };
+  assert.strictEqual(Q.artKey("armor", it), "robe");               // not shipped yet: Common drawing
+  Q.TIERED.add("armor:robe:1");
   try {
-    assert.strictEqual(Q.artKey("boots", it), "greaves-r4");
-    assert.ok(Q.iconOf(it).endsWith("b-greaves-r4.webp"));
-    assert.ok(Q.heroLayers({ boots: it }).some(l => l.src.endsWith("hero-boots-greaves-r4.webp")));
-    assert.strictEqual(Q.artKey("boots", { shape: 1, r: 0 }), "greaves");
-  } finally { Q.TIERED.delete("boots:greaves:4"); }
+    assert.strictEqual(Q.artKey("armor", it), "robe-r1");
+    assert.ok(Q.iconOf(it).endsWith("a-robe-r1.webp"));
+    assert.ok(Q.heroLayers({ armor: it }).some(l => l.src.endsWith("hero-body-robe-r1.webp")));
+    assert.ok(Q.heroLayers({ armor: it }).some(l => l.src.endsWith("hero-hem-robe-r1.webp")));
+    assert.strictEqual(Q.artKey("armor", { shape: 3, r: 0 }), "robe");
+  } finally { Q.TIERED.delete("armor:robe:1"); }
   // shipped weapons: every tier above Common has its own drawing
   const sw = r => Q.heroLayers({ weapon: { slot: "weapon", shape: 0, r } }).find(l => l.k === "w").src.split("/").pop();
   assert.deepStrictEqual([0, 1, 2, 3, 4].map(sw), ["hero-wpn-sword.webp", "hero-wpn-sword-r1.webp", "hero-wpn-sword-r2.webp", "hero-wpn-sword-r3.webp", "hero-wpn-sword-r4.webp"]);

@@ -160,7 +160,7 @@ The prompt is in the "everything left" block below.
 
 ---
 
-## Everything left in one ChatGPT request
+## Everything left in one ChatGPT request. Done (4 merged images, `sets-*.png`), except robe Uncommon
 
 See the chat reply from 2 Oct 2026; the same text is kept in `art/PROMPT_ALL_LEFT.md`.
 
