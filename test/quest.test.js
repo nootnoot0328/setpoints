@@ -300,6 +300,35 @@ test("the service worker's art cache is named after the current art", () => {
   assert.ok(sw.includes(`"setpoint-art-${artHash()}"`), "art changed: set ART in sw.js to setpoint-art-" + artHash());
 });
 
+test("regions rotate weekly from the epoch; past weeks stay in the forest", () => {
+  assert.strictEqual(Q.regionOf("2026-09-21"), "forest");
+  assert.strictEqual(Q.regionOf("2026-09-28"), "forest");
+  assert.deepStrictEqual([1, 2, 3, 4, 5, 6, 7].map(k => Q.regionOf(E.addDays("2026-09-28", 7 * k))),
+    ["snow", "desert", "swamp", "coast", "volcano", "keep", "forest"]);
+  // a past week's monsters are exactly what they were before regions existed
+  const old = Q.mobsForWeek("2026-09-21");
+  assert.strictEqual(old.length, 6); old.forEach(m => assert.ok(m in { slime: 1, mushroom: 1, boar: 1, bat: 1, goblin: 1, wolf: 1, skeleton: 1, wisp: 1 }));
+  // a snow week: its four monsters plus two from the forest, a snow boss
+  const snow = Q.mobsForWeek("2026-10-05");
+  assert.strictEqual(snow.length, 6);
+  for (const m of Object.keys(Q.REGIONS.snow.mobs)) assert.ok(snow.includes(m));
+  assert.strictEqual(Q.bossFor("2026-10-05", 3, 3).art, "boss-snow");
+  assert.strictEqual(Q.bossFor("2026-09-28", 3, 3).art, "boss-golem");
+  assert.strictEqual(Q.mapArt("snow", 9), "bg-snow-day");
+  assert.strictEqual(Q.mapArt("snow", 22), "bg-snow-night");
+  assert.strictEqual(Q.mapArt("forest", 3), "bg-forest");
+  assert.strictEqual(Q.propArt("keep", "flag"), "flag-keep");
+});
+
+test("every region's art exists", () => {
+  for (const r of Q.REGION_ORDER) {
+    const files = [Q.mapArt(r, 9), Q.mapArt(r, 22), ...["platform", "platform-boss", "flag", "signpost"].map(k => Q.propArt(r, k)), ...Object.keys(Q.REGIONS[r].mobs)];
+    if (r !== "forest") files.push("boss-" + r);
+    for (const f of files) assert.ok(fs.existsSync(path.join(__dirname, "..", Q.art(f))), "missing " + f);
+    for (const m of Object.keys(Q.REGIONS[r].mobs)) assert.ok(Q.MOB_SCALE[m], "no scale for " + m);
+  }
+});
+
 test("the route passes through every stop in order", () => {
   const R = Q.buildRoute(Q.STOPS_XY);
   assert.strictEqual(R.at.length, 7);

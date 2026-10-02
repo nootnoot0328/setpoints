@@ -60,12 +60,46 @@
     spell: { en: "Mage", atk: 1.0, hp: 1.0, note: "Interval rounds hit 50% harder. Weigh-in days hit 10% harder.", outfit: "robe" },
     alch: { en: "Cleric", atk: 1.0, hp: 1.1, note: "Food days heal twice as much, and a day on target powers up your next session.", outfit: null }
   };
-  const MOBS = { slime: "Moss Slime", mushroom: "Capshroom", boar: "Bristleback Boar", bat: "Dusk Bat",
+  const FOREST_MOBS = { slime: "Moss Slime", mushroom: "Capshroom", boar: "Bristleback Boar", bat: "Dusk Bat",
     goblin: "Goblin Scout", wolf: "Grey Wolf", skeleton: "Rattlebones", wisp: "Will-o'-wisp" };
-  const MOB_KEYS = Object.keys(MOBS);
-  const FLYING = { bat: 1, wisp: 1 };
+  /* One region per week, in this order, starting the week of REGION_EPOCH (earlier weeks
+     stay in the forest so past battles keep their monsters). Each brings its own map
+     (day and night), four monsters, a boss and props; two forest monsters join them. */
+  const REGION_EPOCH = "2026-09-28";
+  const REGIONS = {
+    forest: { name: "Mossback Highlands", mobs: FOREST_MOBS },
+    snow: { name: "Frostpeak Pass", mobs: { penguin: "Shieldbill Penguin", yeti: "Yeti Cub", shardling: "Ice Shardling", owl: "Frost Owl" },
+      boss: ["Rimefang Wyrm", "Glacier Wyrm", "The Pale Coil", "Frostmaw", "Old Icebreath"] },
+    desert: { name: "Sunscar Dunes", mobs: { scorpion: "Ember Scorpion", cactling: "Cactling", mummy: "Little Mummy", dustspirit: "Dust Spirit" },
+      boss: ["Gilded Scarab", "Sunshell Scarab", "The Dune King", "Jewelback", "Old Sandcrown"] },
+    swamp: { name: "Mirefen Marsh", mobs: { frog: "Reedspear Frog", mudling: "Mudling", firefly: "Lantern Fly", croc: "Croc Grunt" },
+      boss: ["Bogmaw Troll", "Mirefen Troll", "Old Mossjaw", "Rotroot Troll", "The Marsh Brute"] },
+    coast: { name: "Saltwind Coast", mobs: { crab: "Hermit Crab", jelly: "Driftjelly", gull: "Gull Bandit", fishfolk: "Fishfolk Spear" },
+      boss: ["The Deep Kraken", "Tidewrath", "Old Inkmaw", "Saltcoil Kraken", "The Wreck-Taker"] },
+    volcano: { name: "Ashen Caldera", mobs: { imp: "Cinder Imp", lavaslug: "Lava Slug", salamander: "Magma Salamander", beetle: "Obsidian Beetle" },
+      boss: ["Molten Titan", "The Ember Colossus", "Ashheart", "Cinderforge Titan", "Old Slagfist"] },
+    keep: { name: "Hollow Keep", mobs: { ghost: "Lantern Ghost", gargoyle: "Gargoyle Pup", armour: "Hollow Armour", candle: "Candle Wisp" },
+      boss: ["The Lich King", "Morrow the Hollow", "The Crowned Bones", "Lord of Candles", "The Pale Sovereign"] }
+  };
+  const REGION_ORDER = ["forest", "snow", "desert", "swamp", "coast", "volcano", "keep"];
+  function regionOf(ws) {
+    const k = Math.round((Date.parse(ws + "T00:00:00Z") - Date.parse(REGION_EPOCH + "T00:00:00Z")) / 6048e5);
+    return k <= 0 ? "forest" : REGION_ORDER[k % REGION_ORDER.length];
+  }
+  const MOBS = Object.assign({}, ...REGION_ORDER.map(r => REGIONS[r].mobs));
+  const MOB_KEYS = Object.keys(FOREST_MOBS);
+  const FLYING = { bat: 1, wisp: 1, owl: 1, dustspirit: 1, firefly: 1, jelly: 1, ghost: 1, candle: 1 };
   /* Size relative to the hero, so a slime is small, a goblin is about your height and bosses tower over you. */
-  const MOB_SCALE = { slime: 0.8, mushroom: 0.85, boar: 1.05, bat: 0.85, goblin: 1.0, wolf: 1.05, skeleton: 1.0, wisp: 0.8 };
+  const MOB_SCALE = { slime: 0.8, mushroom: 0.85, boar: 1.05, bat: 0.85, goblin: 1.0, wolf: 1.05, skeleton: 1.0, wisp: 0.8,
+    penguin: 0.8, yeti: 1.0, shardling: 0.85, owl: 0.9, scorpion: 0.95, cactling: 0.9, mummy: 0.95, dustspirit: 0.9,
+    frog: 1.0, mudling: 0.9, firefly: 0.85, croc: 1.05, crab: 0.85, jelly: 0.85, gull: 0.9, fishfolk: 1.05,
+    imp: 0.9, lavaslug: 0.85, salamander: 1.0, beetle: 0.95, ghost: 0.85, gargoyle: 0.95, armour: 1.05, candle: 0.8 };
+  /* Map art: the region's own map by day (06:00-17:59) or night, and its props. */
+  function mapArt(region, hour) {
+    const night = hour < 6 || hour >= 18;
+    return region === "forest" && night ? "bg-forest" : `bg-${region}-${night ? "night" : "day"}`;
+  }
+  const propArt = (region, k) => region === "forest" ? k : `${k}-${region}`;
   const BOSSES = [{ art: "boss-golem", names: ["Mossback Golem", "Ironbark Golem", "Cragheart Golem", "Rune-scarred Golem", "Old Stoneface", "Thornroot Golem"] }];
 
   /* Skill effects the battle engine runs. p[] is potency by rarity (uncommon → legendary). */
@@ -123,9 +157,13 @@
       at: (S.health && S.health[d] && S.health[d].stepsAt) || null };
   }
   function mobsForWeek(ws) {
-    const rnd = seeded(hashF("mobs|" + ws)), k = MOB_KEYS.slice();
-    for (let i = k.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [k[i], k[j]] = [k[j], k[i]]; }
-    return k.slice(0, 6);
+    const rnd = seeded(hashF("mobs|" + ws)), shuffle = k => {
+      for (let i = k.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [k[i], k[j]] = [k[j], k[i]]; }
+      return k;
+    };
+    const r = regionOf(ws), k = shuffle(MOB_KEYS.slice());
+    if (r === "forest") return k.slice(0, 6);
+    return shuffle(Object.keys(REGIONS[r].mobs).concat(k.slice(0, 2)));
   }
   /* The seven stops of a week: Mon–Sat monsters, Sunday boss. */
   function weekStops(S, E, ws, td) {
@@ -221,8 +259,9 @@
 
   /* ================================================================ boss */
   function bossFor(ws, lv, target, gearAtk) {
-    const rnd = seeded(hashF("boss|" + ws)), b = BOSSES[Math.floor(rnd() * BOSSES.length)];
-    return { art: b.art, name: b.names[Math.floor(rnd() * b.names.length)], hp: Math.round(target * 16 * (10 + 2 * lv + 0.6 * (gearAtk || 0))) };
+    const rnd = seeded(hashF("boss|" + ws)), r = regionOf(ws);
+    const b = r === "forest" ? BOSSES[Math.floor(rnd() * BOSSES.length)] : { art: "boss-" + r, names: REGIONS[r].boss };
+    return { art: b.art, region: r, name: b.names[Math.floor(rnd() * b.names.length)], hp: Math.round(target * 16 * (10 + 2 * lv + 0.6 * (gearAtk || 0))) };
   }
   const RIR_F = [1.25, 1.25, 1.0, 0.8, 0.6];
   /* One week's fight, day by day, from the logs. The boss falls on Sunday if
@@ -537,7 +576,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
     return `<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true">${out}</svg>`;
   }
 
-  const Core = { RAR, RCOL, ODDS, PITY_RARE, PITY_LEG, CHEST_COST, RALLY, SLOTS, SLOT_NAME, SHAPES, NOUN, SKILLS, CLASSES, RANKS, MOBS, FLYING, MOB_SCALE, STARTER, THEME, STOPS_XY,
+  const Core = { REGIONS, REGION_ORDER, regionOf, mapArt, propArt, RAR, RCOL, ODDS, PITY_RARE, PITY_LEG, CHEST_COST, RALLY, SLOTS, SLOT_NAME, SHAPES, NOUN, SKILLS, CLASSES, RANKS, MOBS, FLYING, MOB_SCALE, STARTER, THEME, STOPS_XY,
     art, doneSets, stepGoal, stepsOn, dayStatus, mobsForWeek, weekStops, levelOf, rankOf, statsAt, gearOf, equipped, heroOf, baseEvents, battle, bossFor, summary,
     pityOf, rollRarity, localItem, aiPrompt, parseItem, migrateItem, iconOf, heroLayers, TIERED, artKey, HAIR_MASKED, HAIRS, HAIR_NAME, HAIR_COLORS, FACES, FACE_NAME, lookOf, buildRoute, achText, ACH_COUNT: ACH.length, chestSVG, hashF, seeded };
   if (typeof module === "object" && module.exports) { module.exports = Core; return; }
@@ -598,6 +637,11 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
       return dirty ? summary() : sum;
     }
     const summary = () => C.summary(S(), E);
+    // the region of a week (default: this week) and its map for the current hour
+    function region(ws) {
+      const r = C.regionOf(ws || E.weekStart(E.today()));
+      return { r, name: C.REGIONS[r].name, map: C.mapArt(r, new Date().getHours()) };
+    }
     function pendingCount() { try { return summary().pending.length; } catch (e) { return 0; } }
 
     /* ---------------------------------------------------- the hero (paper doll) */
@@ -627,7 +671,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
       const root = h("div", { class: "quest force-anim" });
       root.append(existing ? X.subhead("Your hero") : X.head("Quest"));
       const note = h("p", { class: "note" }, C.CLASSES[d.cls].note);
-      const stage = h("div", { class: "q-setupstage", style: { backgroundImage: `url("${C.art("bg-forest")}")` } }, doll(C.equipped(S()), "idle", d.look, d.cls));
+      const stage = h("div", { class: "q-setupstage", style: { backgroundImage: `url("${C.art(region().map)}")` } }, doll(C.equipped(S()), "idle", d.look, d.cls));
       const redraw = () => stage.replaceChildren(doll(C.equipped(S()), "idle", d.look, d.cls));
       // one radio group of chips; pick(k) runs on select
       const radios = (label, keys, isOn, text, pick, extra) => h("div", { class: "q-chips", role: "radiogroup", "aria-label": label }, keys.map(k => h("button", Object.assign({
@@ -672,8 +716,9 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
     /* ---------------------------------------------------- map */
     function mapStage(sum) {
       const td = E.today(), ws = E.weekStart(td), stops = sum.stops, w = sum.week, t = E.daysBetween(ws, td);
-      const stage = h("div", { class: "q-map", role: "group", "aria-label": "This week's adventure map" });
-      stage.style.backgroundImage = `url("${C.art("bg-forest")}")`;
+      const here = region(ws);
+      const stage = h("div", { class: "q-map", role: "group", "aria-label": `This week's adventure map: ${here.name}` });
+      stage.style.backgroundImage = `url("${C.art(here.map)}")`;
       stage.append(h("div", { class: "q-fog f1" }), h("div", { class: "q-fog f2" }));
       const NS = "http://www.w3.org/2000/svg", sv = document.createElementNS(NS, "svg");
       sv.setAttribute("viewBox", `0 0 100 ${ROUTE.vbh.toFixed(2)}`); sv.setAttribute("preserveAspectRatio", "none");
@@ -690,12 +735,12 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
       stage.append(h("div", { class: "q-bossbar" },
         h("div", { class: "q-bossrow" }, h("b", null, w.boss.name), h("span", null, w.won ? "Defeated" : `HP ${fmt(w.bhp)} / ${fmt(w.hp)}`)),
         h("div", { class: "q-bar" }, h("i", { style: { width: (bossPct * 100).toFixed(1) + "%" } }))));
-      at("q-ent q-sign", 13, 84, im("signpost"));
-      at("q-ent q-flag", 36, 91, im("flag", "Start"));
+      at("q-ent q-sign", 13, 84, im(C.propArt(here.r, "signpost")));
+      at("q-ent q-flag", 36, 91, im(C.propArt(here.r, "flag"), "Start"));
       const mobEls = [];
       stops.forEach((st, i) => {
         const [x, y] = C.STOPS_XY[i], boss = st.kind === "boss";
-        at("q-ent q-plat" + (boss ? " boss" : ""), x, y + (boss ? 4.5 : 3), im(boss ? "platform-boss" : "platform"));
+        at("q-ent q-plat" + (boss ? " boss" : ""), x, y + (boss ? 4.5 : 3), im(C.propArt(here.r, boss ? "platform-boss" : "platform")));
         if (!boss) {
           const cls = "q-ent q-mob" + (C.FLYING[st.mob] ? " fly" : "") + (st.met ? " dead" : "") + (st.missed ? " gone" : "");
           mobEls[i] = at(cls, x, y - (C.FLYING[st.mob] ? 5 : 0), h("div", { class: "body", style: { animationDelay: (-i * 0.37) + "s" } }, im(st.mob, C.MOBS[st.mob])));
@@ -827,7 +872,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
       root.append(X.section("Hero"));
       root.append(h("div", { class: "card q-herocard" },
         h("div", { class: "q-herorow" },
-          h("button", { class: "q-heropic", "aria-label": "Edit hero", style: { backgroundImage: `url("${C.art("bg-forest")}")` }, onclick: () => X.push({ v: "qhero" }) }, doll(sum.eq, "idle")),
+          h("button", { class: "q-heropic", "aria-label": "Edit hero", style: { backgroundImage: `url("${C.art(region().map)}")` }, onclick: () => X.push({ v: "qhero" }) }, doll(sum.eq, "idle")),
           h("div", { class: "q-heroinfo" },
             h("b", { class: "q-name" }, sum.hero.name || "Wandering hero"),
             h("span", { class: "q-cls" }, `${cls.en} · ${sum.rank.en} ${sum.rank.tier}`),
@@ -999,7 +1044,7 @@ Rules: higher rarity means a grander name. No brand names, real people, or chara
       const setBars = (b, p) => { bBox.replaceChildren(hpBar(b, w.hp, "boss")); pBox.replaceChildren(hpBar(p, w.stats.hp, "you")); };
       setBars(w.bhp, w.php);
       root.append(h("div", { class: "q-arena" },
-        h("div", { class: "q-arenarow", style: { backgroundImage: `url("${C.art("bg-forest")}")` } }, heroPic, bossPic, pop),
+        h("div", { class: "q-arenarow", style: { backgroundImage: `url("${C.art(region(w.ws).map)}")` } }, heroPic, bossPic, pop),
         h("div", { class: "q-arenabars" },
           h("div", null, h("div", { class: "q-hplbl" }, sum.hero.name || "You"), pBox),
           h("div", null, h("div", { class: "q-hplbl" }, w.boss.name), bBox))));

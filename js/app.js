@@ -1251,7 +1251,7 @@
      in sw.js on the server, fetched past every cache. */
   const UPD = { current: null, latest: null, checking: false, checked: 0, err: null };
   async function currentVersion() {
-    try { const k = (await caches.keys()).filter(x => /^setpoint-\d/.test(x)).sort().pop(); if (k) return k.replace("setpoint-", ""); } catch (e) { }
+    try { const k = (await caches.keys()).filter(x => /^setpoint-\d/.test(x)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).pop(); if (k) return k.replace("setpoint-", ""); } catch (e) { }
     return null;
   }
   async function checkUpdate(manual) {
