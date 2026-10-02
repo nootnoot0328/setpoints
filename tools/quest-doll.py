@@ -243,9 +243,20 @@ def helmet_from(t8, base8, key, masked):
     hair = ((hue > 345) | (hue < 34)) & (sat > 0.3) & (mx < 200)     # brown or red locks
     skin = (r_ > 190) & (g_ > 140) & (b_ > 115) & (r_ - b_ > 25) & (r_ - b_ < 95) & (sat < 0.45)
     below = yy > EYE_Y - 40
-    d &= ~(below & (hair | skin))
+    # skin-coloured pixels over the head are ChatGPT's own scalp showing through; cream horns
+    # and feathers reach past the head, so only the head's own area (plus a margin) is cleared
+    headzone = nd.binary_dilation(base_t[:, :, 3] > 0, iterations=10)
+    d &= ~(below & hair) & ~(skin & headzone)
     d = nd.binary_opening(d, iterations=1)
     d = blobs(d, 300)
+    lab_, k_ = nd.label(nd.binary_dilation(d, iterations=1) & d)
+    for i_ in range(1, k_ + 1):           # pieces that are mostly skin are scalp, not helmet
+        pc = lab_ == i_
+        if (skin & pc).sum() > 0.4 * pc.sum(): d &= ~pc
+    d &= ~nd.binary_dilation(skin & ~headzone & (yy < EYE_Y - 60), iterations=2) | ~skin   # loose scalp arcs above the head
+    lab_, k_ = nd.label(d)                # drop strays (a neighbour's skull, outline scraps)
+    if k_:
+        sz_ = nd.sum(d, lab_, range(1, k_ + 1)); d = np.isin(lab_, [i + 1 for i, z in enumerate(sz_) if z >= 0.15 * sz_.max()])
     d = nd.binary_closing(d, iterations=2)
     holes = nd.binary_fill_holes(d) & ~d      # small holes where steel shine matched the scalp's shine
     lab, k = nd.label(holes); sz = nd.sum(holes, lab, range(1, k + 1))
@@ -253,21 +264,23 @@ def helmet_from(t8, base8, key, masked):
     d &= t[:, :, 3] > 200
     hl = np.zeros_like(t8); hl[d] = t8[d]; hl[:, :, 3] = np.where(d, 255, 0)
     layers["helm-" + key] = hl
-    if masked:      # hair shows only below the helmet's lowest pixel in each column
-        low = np.where(d.any(0), N - 1 - np.argmax(d[::-1], 0), -1)
-        # also just past the helmet's sides, so a bun or tuft isn't sliced along a column
+    if masked:
+        # Natural layering: hair and face sit behind the helmet, so they only need hiding
+        # where they poke out ABOVE it (its top edge, column by column). Through gaps
+        # between horns, below the brim and beside the helmet they show as they would.
         cols = np.nonzero(d.any(0))[0]
-        if len(cols):
-            ext = low.copy(); L0, R0 = cols.min(), cols.max()
-            for x in range(max(0, L0 - 70), L0): ext[x] = max(ext[x], low[L0] - 40)
-            for x in range(R0 + 1, min(N, R0 + 71)): ext[x] = max(ext[x], low[R0] - 40)
-            low = ext
-        mk = np.zeros((N, N, 4), np.uint8); mk[yy > low[None, :]] = 255
+        top = np.full(N, -1); low = np.full(N, -1)
+        top[cols] = np.argmax(d[:, cols], 0)
+        low[cols] = N - 1 - np.argmax(d[::-1, cols], 0)
+        L0, R0 = cols.min(), cols.max()
+        brim = int(np.percentile(low[L0:R0 + 1], 60))
+        hair_hide = yy < top[None, :]
+        side = np.zeros(N, bool); side[max(0, L0 - 40):L0] = True; side[R0 + 1:min(N, R0 + 41)] = True
+        hair_hide &= top[None, :] >= 0
+        mk = np.zeros((N, N, 4), np.uint8); mk[~hair_hide] = 255
         layers["hairmask-" + key] = mk
-        # the face only loses the skull above the brow line, so cheek guards and hoods
-        # (which reach far down) never cut into the face itself
-        fl = np.minimum(low, EYE_Y - 40)
-        fm = np.zeros((N, N, 4), np.uint8); fm[yy > fl[None, :]] = 255
+        face_hide = (yy < top[None, :]) & (top[None, :] >= 0)
+        fm = np.zeros((N, N, 4), np.uint8); fm[~face_hide] = 255
         layers["facemask-" + key] = fm
 HEADS = f"{SP}/art/hero-heads-sheet.png"
 if os.path.exists(HEADS):
@@ -426,8 +439,15 @@ wsheet = load("eq-weapon")
 GRIP = (285.0, 529.0)
 WEAP = {"sword": (0.13, 215, 153), "axe": (0.2, 175, -118), "bow": (0.50, 230, 100), "staff": (0.30, 260, -124)}
 WQ = {"sword": (0, 0), "axe": (384, 0), "bow": (0, 384), "staff": (384, 384)}
+# Icons are drawn handle bottom-left, tip top-right. In the hand that puts the bow's string
+# and the axe's back spike on the outside, so these two are mirrored along their own shaft
+# (the handle-to-tip diagonal) first: the string faces the hero, the axe blade faces out.
+MIRROR = {"axe", "bow"}
+def along_shaft(img):        # reflect across the (1,-1) diagonal: (x, y) -> (-y, -x)
+    return np.ascontiguousarray(np.rot90(img, 2).transpose(1, 0, 2))
 for n, (qx, qy) in WQ.items():
     q = wsheet[qy:qy + 384, qx:qx + 384].copy()
+    if n in MIRROR: q = along_shaft(q)
     ys, xs = np.nonzero(q[:, :, 3] > 40)
     proj = xs - ys
     tail_p = np.array([xs[np.argmin(proj)], ys[np.argmin(proj)]], float); tip = np.array([xs[np.argmax(proj)], ys[np.argmax(proj)]], float)
@@ -470,6 +490,8 @@ for n in WEAP:
         tl, tp = ends(c); scale = 1.0 if r == 1 else min(1.3, max(0.85, np.hypot(*(tp - tl)) / ref_len))
         gp = tl + (tp - tl) * g
         d = np.array([math.cos(math.radians(deg)), math.sin(math.radians(deg))])
+        if n in MIRROR:
+            c = along_shaft(c); tl, tp = ends(c); gp = tl + (tp - tl) * g
         full = np.zeros((N, N, 4), np.uint8); hh, ww = c.shape[:2]
         if hh > N or ww > N: continue
         full[:hh, :ww] = c
