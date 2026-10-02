@@ -12,6 +12,10 @@
    Keys (set as encrypted secrets, never in this file):
      APP_KEY        your devices: read/write state, read/clear inbox
      INBOX_KEY      the Shortcut: can ONLY add inbox readings
+     GAME_KEY       optional. Anime Fusion's AI referee: can ONLY call /ai with
+                    task "anime-fusion-judge", text only, under its own daily
+                    limit. It cannot touch state, inbox or capture, so the key
+                    living in a game on another device never exposes Setpoint.
 
    Routes
      GET    /                 health check, no auth
@@ -29,6 +33,7 @@
      POST   /ai               { task, prompt, image? } → { text, model }  (APP_KEY)
                               Relays one request to OpenAI or Gemini using a key
                               kept here as a secret; the app never sees it.
+                              Also accepts GAME_KEY for task "anime-fusion-judge".
 
    AI settings (optional):
      GROQ_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY   secrets; set one or more
@@ -39,11 +44,16 @@
      AI_MODEL          text model   (defaults: openai/gpt-oss-120b, gpt-4o-mini, gemini-flash-latest)
      AI_VISION_MODEL   photo model  (defaults: qwen/qwen3.8-27b, gpt-4o-mini, gemini-flash-latest)
      AI_DAILY_LIMIT    max AI calls per day, default 60 (a spending brake)
+     GAME_AI_DAILY_LIMIT  max GAME_KEY calls per day, default 40. Counted
+                       separately so the game can never use up Setpoint's quota.
    ========================================================================== */
 
-const VERSION = "1.3.0";
+const VERSION = "1.4.0";
 const MAX_IMAGE_CHARS = 3_000_000;   // ~2.2 MB of JPEG as base64
 const MAX_PROMPT_CHARS = 80_000;
+const GAME_TASK = "anime-fusion-judge";
+const MAX_GAME_PROMPT_CHARS = 24_000;
+const MAX_GAME_TOKENS = 2500;
 const MAX_STATE_BYTES = 8 * 1024 * 1024;
 const INBOX_TTL = 60 * 60 * 24 * 30;
 const MAX_CAPTURES = 200;
@@ -62,10 +72,12 @@ export default {
       const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
       const isApp = safeEqual(token, env.APP_KEY);
       const isInbox = isApp || safeEqual(token, env.INBOX_KEY);
+      // GAME_KEY is deliberately NOT part of isApp/isInbox: it opens /ai only.
+      const isGame = !isApp && safeEqual(token, env.GAME_KEY);
       const path = url.pathname.replace(/\/+$/, "") || "/";
 
       if (path === "/" && req.method === "GET") {
-        return json({ ok: true, service: "setpoint-sync", version: VERSION, configured: !!(env.APP_KEY && env.INBOX_KEY && env.SP), ai: aiProvider(env) });
+        return json({ ok: true, service: "setpoint-sync", version: VERSION, configured: !!(env.APP_KEY && env.INBOX_KEY && env.SP), ai: aiProvider(env), game: !!env.GAME_KEY });
       }
       if (!env.SP) return json({ error: "KV binding SP is missing" }, 500);
 
@@ -151,12 +163,18 @@ export default {
         return json({ error: "method not allowed" }, 405);
       }
       if (path === "/ai") {
-        if (!isApp) return json({ error: "unauthorised" }, 401);
+        if (!isApp && !isGame) return json({ error: "unauthorised" }, 401);
         if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
         if (!aiProvider(env)) return json({ error: "AI isn't set up on this Worker. Add OPENAI_API_KEY or GEMINI_API_KEY as a secret." }, 501);
         const body = await req.json().catch(() => null);
         if (!body || typeof body.prompt !== "string" || !body.prompt.trim()) return json({ error: "expected { task, prompt, image? }" }, 400);
         if (body.prompt.length > MAX_PROMPT_CHARS) return json({ error: "prompt too long" }, 413);
+        if (isGame) {
+          // the game key is scoped: one task, text only, smaller prompts and answers
+          if (body.task !== GAME_TASK) return json({ error: "this key can only be used for " + GAME_TASK }, 403);
+          if (body.image != null) return json({ error: "this key can't send images" }, 403);
+          if (body.prompt.length > MAX_GAME_PROMPT_CHARS) return json({ error: "prompt too long" }, 413);
+        }
         let image = null;
         if (body.image != null) {
           const m = typeof body.image === "string" && body.image.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/);
@@ -165,11 +183,12 @@ export default {
           image = { mime: m[1], data: m[2] };
         }
         // daily brake so a leaked key or a bug can't run up a bill
-        const day = new Date().toISOString().slice(0, 10), ck = "ai:count:" + day;
-        const used = parseInt(await env.SP.get(ck) || "0", 10), limit = parseInt(env.AI_DAILY_LIMIT || "60", 10);
-        if (used >= limit) return json({ error: `Daily AI limit reached (${limit}). Raise AI_DAILY_LIMIT in the Worker settings if you need more.` }, 429);
+        const day = new Date().toISOString().slice(0, 10), ck = (isGame ? "ai:game:count:" : "ai:count:") + day;
+        const limitVar = isGame ? "GAME_AI_DAILY_LIMIT" : "AI_DAILY_LIMIT";
+        const used = parseInt(await env.SP.get(ck) || "0", 10), limit = parseInt(env[limitVar] || (isGame ? "40" : "60"), 10);
+        if (used >= limit) return json({ error: `Daily AI limit reached (${limit}). Raise ${limitVar} in the Worker settings if you need more.` }, 429);
         await env.SP.put(ck, String(used + 1), { expirationTtl: 60 * 60 * 48 });
-        const maxTokens = Math.min(4000, Math.max(200, body.maxTokens | 0 || 900));
+        const maxTokens = Math.min(isGame ? MAX_GAME_TOKENS : 4000, Math.max(200, body.maxTokens | 0 || 900));
         // try the preferred provider, retry once if it's busy, then fall back to any other configured one
         const first = image ? visionProvider(env) : textProvider(env);
         const order = [first, ...(image ? ["gemini", "openai", "groq"] : ["groq", "openai", "gemini"]).filter(p => p !== first && env[KEYS[p]])];

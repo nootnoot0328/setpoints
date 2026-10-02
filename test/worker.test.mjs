@@ -88,6 +88,36 @@ await test("AI: needs the app key, a provider, and respects the daily limit", as
   assert.strictEqual((await call(e, "POST", "/ai", { key: "app-secret-123", body: { prompt: "x", image: "http://evil/x.png" } })).status, 400);
   assert.strictEqual((await call(e, "GET", "/")).data.ai, "openai");
 });
+await test("AI: game key is scoped to the Anime Fusion judge and has its own limit", async () => {
+  const e = env(); e.GAME_KEY = "game-secret-789"; e.OPENAI_API_KEY = "sk-test"; e.AI_DAILY_LIMIT = "1"; e.GAME_AI_DAILY_LIMIT = "2";
+  let sent = null;
+  e.FETCH = async (url, opt) => { sent = JSON.parse(opt.body); return new Response(JSON.stringify({ choices: [{ message: { content: "{}" } }] }), { status: 200 }); };
+  const game = "game-secret-789", task = "anime-fusion-judge";
+  // locked out of everything that isn't /ai
+  for (const [m, path] of [["GET", "/state"], ["PUT", "/state"], ["GET", "/inbox"], ["POST", "/inbox"], ["GET", "/capture"], ["POST", "/capture"], ["DELETE", "/capture"]])
+    assert.strictEqual((await call(e, m, path, { key: game, body: m === "GET" ? undefined : {} })).status, 401, m + " " + path);
+  // only the judge task, text only, short prompts
+  assert.strictEqual((await call(e, "POST", "/ai", { key: game, body: { task: "food", prompt: "x" } })).status, 403);
+  assert.strictEqual((await call(e, "POST", "/ai", { key: game, body: { prompt: "x" } })).status, 403);
+  assert.strictEqual((await call(e, "POST", "/ai", { key: game, body: { task, prompt: "x", image: "data:image/png;base64,iVBOR" } })).status, 403);
+  assert.strictEqual((await call(e, "POST", "/ai", { key: game, body: { task, prompt: "x".repeat(24001) } })).status, 413);
+  // works, and output tokens are capped
+  const ok = await call(e, "POST", "/ai", { key: game, body: { task, prompt: "judge", maxTokens: 99999 } });
+  assert.strictEqual(ok.status, 200); assert.strictEqual(sent.max_tokens, 2500);
+  // separate counters: the game hitting its cap leaves Setpoint's quota alone, and vice versa
+  assert.strictEqual((await call(e, "POST", "/ai", { key: game, body: { task, prompt: "judge" } })).status, 200);
+  const capped = await call(e, "POST", "/ai", { key: game, body: { task, prompt: "judge" } });
+  assert.strictEqual(capped.status, 429); assert.ok(capped.data.error.includes("GAME_AI_DAILY_LIMIT"));
+  assert.strictEqual((await call(e, "POST", "/ai", { key: "app-secret-123", body: { prompt: "coach" } })).status, 200);
+  assert.strictEqual((await call(e, "POST", "/ai", { key: "app-secret-123", body: { prompt: "coach" } })).status, 429);
+  assert.strictEqual((await call(e, "GET", "/")).data.game, true);
+});
+await test("AI: an unset GAME_KEY never matches an empty or missing token", async () => {
+  const e = env(); e.OPENAI_API_KEY = "sk-test";
+  assert.strictEqual((await call(e, "POST", "/ai", { body: { task: "anime-fusion-judge", prompt: "x" } })).status, 401);
+  assert.strictEqual((await call(e, "POST", "/ai", { key: "undefined", body: { task: "anime-fusion-judge", prompt: "x" } })).status, 401);
+  assert.strictEqual((await call(e, "GET", "/")).data.game, false);
+});
 await test("AI: Gemini request shape", async () => {
   const e = env(); e.GEMINI_API_KEY = "g-test"; let sent = null;
   e.FETCH = async (url, opt) => { sent = { url, body: JSON.parse(opt.body), key: opt.headers["x-goog-api-key"] };
