@@ -89,21 +89,21 @@ Edit `ALLOWED_ORIGINS` in `wrangler.toml` first if your Pages address differs.
 
 Send keys as `Authorization: Bearer <key>`.
 
-## Optional: Anime Fusion's AI referee
+## Optional: Anime Fusion's AI referee and character sheets
 
-Anime Fusion (another of your apps on the same GitHub Pages address) can use this Worker's AI to judge team battles. It gets its **own key**, `GAME_KEY`, which is deliberately weaker than `APP_KEY`:
+Anime Fusion (another of your apps on the same GitHub Pages address) can use this Worker's AI to judge team battles and to write character sheets (name, backstory, dialogue) for fusions. It gets its **own key**, `GAME_KEY`, which is deliberately weaker than `APP_KEY`:
 
 | Can it… | `APP_KEY` | `GAME_KEY` |
 |---|---|---|
 | Read or overwrite your Setpoint data, Health inbox or bank alerts | yes | **no** (401) |
-| Call `/ai` | any task, photos allowed | only task `anime-fusion-judge`, text only, prompt ≤ 24,000 characters, answer ≤ 2,500 tokens |
+| Call `/ai` | any task, photos allowed | only tasks `anime-fusion-judge` and `anime-fusion-sheet`, text only, prompt ≤ 24,000 characters, answer ≤ 2,500 tokens |
 | Daily limit | `AI_DAILY_LIMIT` (default 60) | `GAME_AI_DAILY_LIMIT` (default 40), counted **separately** |
 
-So if the game key leaks, the worst case is someone spending up to 40 judge calls a day of your AI credit. They cannot see or change anything else, and Setpoint's own quota is unaffected.
+So if the game key leaks, the worst case is someone spending up to 40 game calls a day (judging and sheets share the limit) of your AI credit. They cannot see or change anything else, and Setpoint's own quota is unaffected.
 
 1. Make a long random key, for example in a terminal: `openssl rand -base64 32`.
 2. In the Worker: *Settings → Variables and Secrets → Add* → type **Secret**, name `GAME_KEY`, paste the key.
-3. Paste the new `worker.js` (version 1.4.0 or later) and Deploy. Opening the Worker address should now show `"game": true`.
+3. Paste the new `worker.js` (version 1.5.0 or later; 1.4.0 can judge battles but refuses character sheets) and Deploy. Opening the Worker address should now show `"game": true`.
 4. In Anime Fusion: *Settings → AI referee*, paste the Worker address and the game key, and tap *Test*.
 
 To revoke it, delete or change `GAME_KEY`. Setpoint keeps working because it uses `APP_KEY`.

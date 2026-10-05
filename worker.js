@@ -12,8 +12,9 @@
    Keys (set as encrypted secrets, never in this file):
      APP_KEY        your devices: read/write state, read/clear inbox
      INBOX_KEY      the Shortcut: can ONLY add inbox readings
-     GAME_KEY       optional. Anime Fusion's AI referee: can ONLY call /ai with
-                    task "anime-fusion-judge", text only, under its own daily
+     GAME_KEY       optional. Anime Fusion's AI: can ONLY call /ai with task
+                    "anime-fusion-judge" (battle referee) or "anime-fusion-sheet"
+                    (character sheet), text only, under its own daily
                     limit. It cannot touch state, inbox or capture, so the key
                     living in a game on another device never exposes Setpoint.
 
@@ -33,7 +34,7 @@
      POST   /ai               { task, prompt, image? } → { text, model }  (APP_KEY)
                               Relays one request to OpenAI or Gemini using a key
                               kept here as a secret; the app never sees it.
-                              Also accepts GAME_KEY for task "anime-fusion-judge".
+                              Also accepts GAME_KEY for tasks "anime-fusion-judge" and "anime-fusion-sheet".
 
    AI settings (optional):
      GROQ_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY   secrets; set one or more
@@ -48,10 +49,10 @@
                        separately so the game can never use up Setpoint's quota.
    ========================================================================== */
 
-const VERSION = "1.4.0";
+const VERSION = "1.5.0";
 const MAX_IMAGE_CHARS = 3_000_000;   // ~2.2 MB of JPEG as base64
 const MAX_PROMPT_CHARS = 80_000;
-const GAME_TASK = "anime-fusion-judge";
+const GAME_TASKS = ["anime-fusion-judge", "anime-fusion-sheet"];
 const MAX_GAME_PROMPT_CHARS = 24_000;
 const MAX_GAME_TOKENS = 2500;
 const MAX_STATE_BYTES = 8 * 1024 * 1024;
@@ -170,8 +171,8 @@ export default {
         if (!body || typeof body.prompt !== "string" || !body.prompt.trim()) return json({ error: "expected { task, prompt, image? }" }, 400);
         if (body.prompt.length > MAX_PROMPT_CHARS) return json({ error: "prompt too long" }, 413);
         if (isGame) {
-          // the game key is scoped: one task, text only, smaller prompts and answers
-          if (body.task !== GAME_TASK) return json({ error: "this key can only be used for " + GAME_TASK }, 403);
+          // the game key is scoped: the game's own tasks, text only, smaller prompts and answers
+          if (!GAME_TASKS.includes(body.task)) return json({ error: "this key can only be used for " + GAME_TASKS.join(" or ") }, 403);
           if (body.image != null) return json({ error: "this key can't send images" }, 403);
           if (body.prompt.length > MAX_GAME_PROMPT_CHARS) return json({ error: "prompt too long" }, 413);
         }

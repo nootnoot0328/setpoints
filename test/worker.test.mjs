@@ -88,7 +88,7 @@ await test("AI: needs the app key, a provider, and respects the daily limit", as
   assert.strictEqual((await call(e, "POST", "/ai", { key: "app-secret-123", body: { prompt: "x", image: "http://evil/x.png" } })).status, 400);
   assert.strictEqual((await call(e, "GET", "/")).data.ai, "openai");
 });
-await test("AI: game key is scoped to the Anime Fusion judge and has its own limit", async () => {
+await test("AI: game key is scoped to Anime Fusion's tasks and has its own limit", async () => {
   const e = env(); e.GAME_KEY = "game-secret-789"; e.OPENAI_API_KEY = "sk-test"; e.AI_DAILY_LIMIT = "1"; e.GAME_AI_DAILY_LIMIT = "2";
   let sent = null;
   e.FETCH = async (url, opt) => { sent = JSON.parse(opt.body); return new Response(JSON.stringify({ choices: [{ message: { content: "{}" } }] }), { status: 200 }); };
@@ -104,6 +104,9 @@ await test("AI: game key is scoped to the Anime Fusion judge and has its own lim
   // works, and output tokens are capped
   const ok = await call(e, "POST", "/ai", { key: game, body: { task, prompt: "judge", maxTokens: 99999 } });
   assert.strictEqual(ok.status, 200); assert.strictEqual(sent.max_tokens, 2500);
+  // the character-sheet task is allowed too, and shares the same game counter
+  e.GAME_AI_DAILY_LIMIT = "3";
+  assert.strictEqual((await call(e, "POST", "/ai", { key: game, body: { task: "anime-fusion-sheet", prompt: "sheet" } })).status, 200);
   // separate counters: the game hitting its cap leaves Setpoint's quota alone, and vice versa
   assert.strictEqual((await call(e, "POST", "/ai", { key: game, body: { task, prompt: "judge" } })).status, 200);
   const capped = await call(e, "POST", "/ai", { key: game, body: { task, prompt: "judge" } });
